@@ -17,6 +17,11 @@
 @interface CKMessage
 @end
 
+@interface UIApplication (Undocumented)
+- (_Bool)launchApplicationWithIdentifier:(id)arg1 suspended:(_Bool)arg2;
++ (id)sharedApplication;
+@end
+
 %hook SMSApplication
 
 @interface SMServerIPC : NSObject
@@ -66,12 +71,59 @@
 @end
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
-
-	[[%c(NSNotificationCenter) defaultCenter] addObserver:self selector:@selector(notiCallback:) name:(NSNotificationName)@"smserverSend" object:nil];
-
+	
 	SMServerIPC* center = [SMServerIPC sharedInstance];
+
+	NSLog(@"NLGf: Launched application");
 
 	return %orig;
 }
 
 %end
+
+%hook Springboard
+
+@interface LaunchSMSIPC : NSObject
+@end
+
+@implementation LaunchSMSIPC {
+	MRYIPCCenter* _center;
+}
+
++(void)load {
+	[self sharedInstance];
+}
+
++(instancetype)sharedInstance {
+	static dispatch_once_t onceToken = 0;
+	__strong static LaunchSMSIPC* sharedInstance = nil;
+	dispatch_once(&onceToken, ^{
+		sharedInstance = [[self alloc] init];
+	});
+	return sharedInstance;
+}
+
+-(instancetype)init {
+	if ((self = [super init])) {
+		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
+		[_center addTarget:self action:@selector(launchSMS)];
+	}
+	return self;
+}
+
+- (void) launchSMS {
+	NSLog(@"NLGF: called LaunchSMS");
+
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+}
+
+@end
+
+%end
+
+%ctor {
+	
+	LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
+
+	NSLog(@"NLGF: called ctor");
+}
