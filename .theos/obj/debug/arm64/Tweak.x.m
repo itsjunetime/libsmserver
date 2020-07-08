@@ -13,6 +13,7 @@
 
 @interface CKComposition
 - (id)initWithText:(id)arg1 subject:(id)arg2;
+- (id)compositionByAppendingMediaObject:(id)arg1;
 @end
 
 @interface CKMessage
@@ -44,10 +45,10 @@
 #define _LOGOS_RETURN_RETAINED
 #endif
 
-@class CKConversationList; @class Springboard; @class CKComposition; @class SMSApplication; 
+@class CKConversationList; @class SMSApplication; @class CKComposition; @class Springboard; 
 static _Bool (*_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$)(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); 
-static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }
-#line 25 "Tweak.x"
+static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }
+#line 26 "Tweak.x"
 
 
 @interface SMServerIPC : NSObject
@@ -74,6 +75,7 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(handleText:)];
+		[_center addTarget:self action:@selector(sendAttachment:)];
 	}
 	return self;
 }
@@ -94,13 +96,34 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 	[conversation sendMessage:message newComposition:YES];
 }
 
+- (void)sendAttachment:(NSDictionary *)vals {
+	NSLog(@"NLGF: called send attachment");
+
+	NSString* attachment = vals[@"attachment"];
+	NSString* body = vals[@"body"];
+	NSString* address = vals[@"address"];
+
+	CKConversationList* list = [_logos_static_class_lookup$CKConversationList() sharedConversationList];
+
+	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+
+	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
+	CKComposition* composition = [[_logos_static_class_lookup$CKComposition() alloc] initWithText:text subject:nil];
+
+	NSData* data = [NSData dataWithContentsOfFile:attachment];
+	composition = [composition compositionByAppendingMediaObject:data];
+
+	CKMessage* message = [conversation messageWithComposition:composition];
+	[conversation sendMessage:message newComposition:YES];
+}
+
 @end
 
 static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST __unused self, SEL __unused _cmd, id arg1, id arg2) {
 	
 	SMServerIPC* center = [SMServerIPC sharedInstance];
 
-	NSLog(@"NLGf: Launched application");
+	NSLog(@"NLGF: Launched application");
 
 	return _logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$(self, _cmd, arg1, arg2);
 }
@@ -138,6 +161,8 @@ static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunch
 }
 
 - (void) launchSMS {
+	NSLog(@"NLGF: called LaunchSMS");
+
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
@@ -145,8 +170,7 @@ static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunch
 
 
 
-static __attribute__((constructor)) void _logosLocalCtor_60a54890(int __unused argc, char __unused **argv, char __unused **envp) {
-
+static __attribute__((constructor)) void _logosLocalCtor_d0f2e29d(int __unused argc, char __unused **argv, char __unused **envp) {
 	
 	LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 
@@ -154,4 +178,4 @@ static __attribute__((constructor)) void _logosLocalCtor_60a54890(int __unused a
 }
 static __attribute__((constructor)) void _logosLocalInit() {
 {Class _logos_class$_ungrouped$SMSApplication = objc_getClass("SMSApplication"); { MSHookMessageEx(_logos_class$_ungrouped$SMSApplication, @selector(application:didFinishLaunchingWithOptions:), (IMP)&_logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$, (IMP*)&_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$);}} }
-#line 129 "Tweak.x"
+#line 153 "Tweak.x"

@@ -12,6 +12,7 @@
 
 @interface CKComposition
 - (id)initWithText:(id)arg1 subject:(id)arg2;
+- (id)compositionByAppendingMediaObject:(id)arg1;
 @end
 
 @interface CKMessage
@@ -48,6 +49,7 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(handleText:)];
+		[_center addTarget:self action:@selector(sendAttachment:)];
 	}
 	return self;
 }
@@ -68,13 +70,36 @@
 	[conversation sendMessage:message newComposition:YES];
 }
 
+- (void)sendAttachment:(NSDictionary *)vals {
+	/// THIS FUNCTION DOES NOT WORK :(
+
+	NSLog(@"NLGF: called send attachment");
+
+	NSString* attachment = vals[@"attachment"];
+	NSString* body = vals[@"body"];
+	NSString* address = vals[@"address"];
+
+	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
+
+	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+
+	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
+	CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+
+	NSData* data = [NSData dataWithContentsOfFile:attachment];
+	composition = [composition compositionByAppendingMediaObject:data];
+
+	CKMessage* message = [conversation messageWithComposition:composition];
+	[conversation sendMessage:message newComposition:YES];
+}
+
 @end
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
 	
 	SMServerIPC* center = [SMServerIPC sharedInstance];
 
-	NSLog(@"NLGf: Launched application");
+	NSLog(@"NLGF: Launched application");
 
 	return %orig;
 }
