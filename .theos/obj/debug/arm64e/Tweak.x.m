@@ -1,6 +1,10 @@
 #line 1 "Tweak.x"
 #import <MRYIPCCenter.h>
 
+@interface NSObject (Undocumented)
++ (id)description;
+@end
+
 @interface CKConversationList
 - (id)conversationForExistingChatWithGroupID:(id)arg1;
 + (id)sharedConversationList;
@@ -11,12 +15,20 @@
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
 
-@interface CKComposition
+@interface CKComposition : NSObject
 - (id)initWithText:(id)arg1 subject:(id)arg2;
 - (id)compositionByAppendingMediaObject:(id)arg1;
 @end
 
 @interface CKMessage
+@end
+
+@interface CKMediaObject : NSObject
+@end
+
+@interface CKMediaObjectManager : NSObject
++ (id)sharedInstance;
+- (id)mediaObjectWithFileURL:(id)arg1 filename:(id)arg2 transcoderUserInfo:(id)arg3 attributionInfo:(id)arg4 hideAttachment:(_Bool)arg5;
 @end
 
 @interface UIApplication (Undocumented)
@@ -45,10 +57,10 @@
 #define _LOGOS_RETURN_RETAINED
 #endif
 
-@class CKComposition; @class Springboard; @class SMSApplication; @class CKConversationList; 
+@class CKComposition; @class Springboard; @class SMSApplication; @class CKConversationList; @class CKMediaObjectManager; 
 static _Bool (*_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$)(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); 
-static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }
-#line 26 "Tweak.x"
+static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKMediaObjectManager(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKMediaObjectManager"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }
+#line 38 "Tweak.x"
 
 
 @interface SMServerIPC : NSObject
@@ -97,9 +109,9 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 }
 
 - (void)sendAttachment:(NSDictionary *)vals {
-	NSLog(@"NLGF: called send attachment");
+	
 
-	NSString* attachment = vals[@"attachment"];
+	NSArray* attachments = vals[@"attachment"];
 	NSString* body = vals[@"body"];
 	NSString* address = vals[@"address"];
 
@@ -110,8 +122,16 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
 	CKComposition* composition = [[_logos_static_class_lookup$CKComposition() alloc] initWithText:text subject:nil];
 
-	NSData* data = [NSData dataWithContentsOfFile:attachment];
-	composition = [composition compositionByAppendingMediaObject:data];
+	CKMediaObjectManager* si = [_logos_static_class_lookup$CKMediaObjectManager() sharedInstance];
+
+	for (NSString* obj in attachments) {
+		NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
+		NSURL *file_url = [NSURL URLWithString:new_string];
+		CKMediaObject* obj = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
+		composition = [composition compositionByAppendingMediaObject:obj];
+
+		NSLog(@"NLGF: appended to composition: %@", [composition description]);
+	}
 
 	CKMessage* message = [conversation messageWithComposition:composition];
 	[conversation sendMessage:message newComposition:YES];
@@ -170,7 +190,7 @@ static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunch
 
 
 
-static __attribute__((constructor)) void _logosLocalCtor_d0f2e29d(int __unused argc, char __unused **argv, char __unused **envp) {
+static __attribute__((constructor)) void _logosLocalCtor_5a0f9afd(int __unused argc, char __unused **argv, char __unused **envp) {
 	
 	LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 
@@ -178,4 +198,4 @@ static __attribute__((constructor)) void _logosLocalCtor_d0f2e29d(int __unused a
 }
 static __attribute__((constructor)) void _logosLocalInit() {
 {Class _logos_class$_ungrouped$SMSApplication = objc_getClass("SMSApplication"); { MSHookMessageEx(_logos_class$_ungrouped$SMSApplication, @selector(application:didFinishLaunchingWithOptions:), (IMP)&_logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$, (IMP*)&_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$);}} }
-#line 153 "Tweak.x"
+#line 173 "Tweak.x"

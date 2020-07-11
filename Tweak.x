@@ -1,5 +1,9 @@
 #import <MRYIPCCenter.h>
 
+@interface NSObject (Undocumented)
++ (id)description;
+@end
+
 @interface CKConversationList
 - (id)conversationForExistingChatWithGroupID:(id)arg1;
 + (id)sharedConversationList;
@@ -10,12 +14,20 @@
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
 
-@interface CKComposition
+@interface CKComposition : NSObject
 - (id)initWithText:(id)arg1 subject:(id)arg2;
 - (id)compositionByAppendingMediaObject:(id)arg1;
 @end
 
 @interface CKMessage
+@end
+
+@interface CKMediaObject : NSObject
+@end
+
+@interface CKMediaObjectManager : NSObject
++ (id)sharedInstance;
+- (id)mediaObjectWithFileURL:(id)arg1 filename:(id)arg2 transcoderUserInfo:(id)arg3 attributionInfo:(id)arg4 hideAttachment:(_Bool)arg5;
 @end
 
 @interface UIApplication (Undocumented)
@@ -71,11 +83,8 @@
 }
 
 - (void)sendAttachment:(NSDictionary *)vals {
-	/// THIS FUNCTION DOES NOT WORK :(
 
-	NSLog(@"NLGF: called send attachment");
-
-	NSString* attachment = vals[@"attachment"];
+	NSArray* attachments = vals[@"attachment"];
 	NSString* body = vals[@"body"];
 	NSString* address = vals[@"address"];
 
@@ -86,8 +95,14 @@
 	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
 	CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
 
-	NSData* data = [NSData dataWithContentsOfFile:attachment];
-	composition = [composition compositionByAppendingMediaObject:data];
+	CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+
+	for (NSString* obj in attachments) {
+		NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
+		NSURL *file_url = [NSURL URLWithString:new_string];
+		CKMediaObject* obj = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
+		composition = [composition compositionByAppendingMediaObject:obj];
+	}
 
 	CKMessage* message = [conversation messageWithComposition:composition];
 	[conversation sendMessage:message newComposition:YES];
