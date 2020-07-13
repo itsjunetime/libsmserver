@@ -60,26 +60,9 @@
 -(instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-		[_center addTarget:self action:@selector(handleText:)];
 		[_center addTarget:self action:@selector(sendAttachment:)];
 	}
 	return self;
-}
-
-- (void)handleText:(NSDictionary *)vals {
-
-	NSString* body = vals[@"body"];
-	NSString* address = vals[@"address"];
-
-	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
-
-	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
-
-	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
-	CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
-
-	CKMessage* message = [conversation messageWithComposition:composition];
-	[conversation sendMessage:message newComposition:YES];
 }
 
 - (void)sendAttachment:(NSDictionary *)vals {
@@ -147,6 +130,7 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
 		[_center addTarget:self action:@selector(launchSMS)];
+		[_center addTarget:self action:@selector(relaunchSMServer)];
 	}
 	return self;
 }
@@ -155,6 +139,12 @@
 	NSLog(@"NLGF: called LaunchSMS");
 
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+}
+
+- (void) relaunchSMServer {
+	NSLog(@"NLGF: called relaunchSMServer");
+
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
 }
 
 @end

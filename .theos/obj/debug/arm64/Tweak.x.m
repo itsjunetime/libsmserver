@@ -57,9 +57,9 @@
 #define _LOGOS_RETURN_RETAINED
 #endif
 
-@class Springboard; @class CKMediaObjectManager; @class CKConversationList; @class SMSApplication; @class CKComposition; 
+@class CKConversationList; @class Springboard; @class SMSApplication; @class CKMediaObjectManager; @class CKComposition; 
 static _Bool (*_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$)(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$(_LOGOS_SELF_TYPE_NORMAL SMSApplication* _LOGOS_SELF_CONST, SEL, id, id); 
-static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKMediaObjectManager(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKMediaObjectManager"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }
+static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKConversationList(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKConversationList"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKMediaObjectManager(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKMediaObjectManager"); } return _klass; }static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _logos_static_class_lookup$CKComposition(void) { static Class _klass; if(!_klass) { _klass = objc_getClass("CKComposition"); } return _klass; }
 #line 38 "Tweak.x"
 
 
@@ -86,30 +86,12 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 -(instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-		[_center addTarget:self action:@selector(handleText:)];
 		[_center addTarget:self action:@selector(sendAttachment:)];
 	}
 	return self;
 }
 
-- (void)handleText:(NSDictionary *)vals {
-
-	NSString* body = vals[@"body"];
-	NSString* address = vals[@"address"];
-
-	CKConversationList* list = [_logos_static_class_lookup$CKConversationList() sharedConversationList];
-
-	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
-
-	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
-	CKComposition* composition = [[_logos_static_class_lookup$CKComposition() alloc] initWithText:text subject:nil];
-
-	CKMessage* message = [conversation messageWithComposition:composition];
-	[conversation sendMessage:message newComposition:YES];
-}
-
 - (void)sendAttachment:(NSDictionary *)vals {
-	
 
 	NSArray* attachments = vals[@"attachment"];
 	NSString* body = vals[@"body"];
@@ -129,8 +111,6 @@ static __inline__ __attribute__((always_inline)) __attribute__((unused)) Class _
 		NSURL *file_url = [NSURL URLWithString:new_string];
 		CKMediaObject* obj = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
 		composition = [composition compositionByAppendingMediaObject:obj];
-
-		NSLog(@"NLGF: appended to composition: %@", [composition description]);
 	}
 
 	CKMessage* message = [conversation messageWithComposition:composition];
@@ -176,6 +156,7 @@ static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunch
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
 		[_center addTarget:self action:@selector(launchSMS)];
+		[_center addTarget:self action:@selector(relaunchSMServer)];
 	}
 	return self;
 }
@@ -186,11 +167,17 @@ static _Bool _logos_method$_ungrouped$SMSApplication$application$didFinishLaunch
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
+- (void) relaunchSMServer {
+	NSLog(@"NLGF: called relaunchSMServer");
+
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+}
+
 @end
 
 
 
-static __attribute__((constructor)) void _logosLocalCtor_5a0f9afd(int __unused argc, char __unused **argv, char __unused **envp) {
+static __attribute__((constructor)) void _logosLocalCtor_c3ccdc8d(int __unused argc, char __unused **argv, char __unused **envp) {
 	
 	LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 
@@ -198,4 +185,4 @@ static __attribute__((constructor)) void _logosLocalCtor_5a0f9afd(int __unused a
 }
 static __attribute__((constructor)) void _logosLocalInit() {
 {Class _logos_class$_ungrouped$SMSApplication = objc_getClass("SMSApplication"); { MSHookMessageEx(_logos_class$_ungrouped$SMSApplication, @selector(application:didFinishLaunchingWithOptions:), (IMP)&_logos_method$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$, (IMP*)&_logos_orig$_ungrouped$SMSApplication$application$didFinishLaunchingWithOptions$);}} }
-#line 173 "Tweak.x"
+#line 160 "Tweak.x"
