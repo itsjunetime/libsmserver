@@ -60,12 +60,12 @@
 -(instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-		[_center addTarget:self action:@selector(sendAttachment:)];
+		[_center addTarget:self action:@selector(sendText:)];
 	}
 	return self;
 }
 
-- (void)sendAttachment:(NSDictionary *)vals {
+- (void)sendText:(NSDictionary *)vals {
 
 	NSArray* attachments = vals[@"attachment"];
 	NSString* body = vals[@"body"];
@@ -97,7 +97,7 @@
 	
 	SMServerIPC* center = [SMServerIPC sharedInstance];
 
-	NSLog(@"NLGF: Launched application");
+	NSLog(@"LibSMServer_app: Launched application");
 
 	return %orig;
 }
@@ -136,15 +136,18 @@
 }
 
 - (void) launchSMS {
-	NSLog(@"NLGF: called LaunchSMS");
+	NSLog(@"LibSMServer_app: called LaunchSMS");
 
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
 - (void) relaunchSMServer {
-	NSLog(@"NLGF: called relaunchSMServer");
+	NSLog(@"LibSMServer_app: called relaunchSMServer");
 
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+
+	/// Also reopen mobileSMS 'cause it can be shut down if the server is running for too long
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
 @end
@@ -155,5 +158,5 @@
 	
 	LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 
-	NSLog(@"NLGF: called ctor");
+	NSLog(@"LibSMServer_app: called ctor");
 }
