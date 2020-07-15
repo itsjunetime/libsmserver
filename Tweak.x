@@ -37,6 +37,10 @@
 
 %hook SMSApplication
 
+/*@interface IPCTextWatcher
+- (void)handleReceivedTextWithCallback;
+@end*/
+
 @interface SMServerIPC : NSObject
 @end
 
@@ -71,23 +75,40 @@
 	NSString* body = vals[@"body"];
 	NSString* address = vals[@"address"];
 
+	/// Get the shared list of all existing conversations
 	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
 
+	/// Get the conversation for a specific person.
+	/// Address should be phone like '+15293992094' or email, or group chat id like 'chat8373916825376185'
 	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
 
+	/// Create string with the body of the text
 	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
+
+	/// Initialize composition with the body of the text, no subject for now. Subject could be another NSAttributedString.
 	CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
 
+	/// Get the CKMediaObjectManager sharedInstance for adding new objects.
 	CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
 
 	for (NSString* obj in attachments) {
+		/// Get the file path of the file, such as 'file:///private/var/mobile/Media/DCIM/100APPLE/IMG_000.JPG'
 		NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
+
+		/// Turn that string into a URL
 		NSURL *file_url = [NSURL URLWithString:new_string];
+
+		/// Create a CKMediaObject from the URL, everything else nil + NO for hidden
 		CKMediaObject* obj = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
+		
+		/// Add the media Object onto the composition
 		composition = [composition compositionByAppendingMediaObject:obj];
 	}
 
+	/// Turn the composition into a message
 	CKMessage* message = [conversation messageWithComposition:composition];
+
+	/// Send it!
 	[conversation sendMessage:message newComposition:YES];
 }
 
@@ -101,6 +122,20 @@
 
 	return %orig;
 }
+
+/*- (void)_messageReceived:(id)arg1 {
+	/// This will hopefully call something in the app to update the variable for the latest texts, 
+	/// but it's not working right now. Maybe some time in the future.
+    
+	NSLog(@"LibSMServer_app: Received a message");
+
+    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+    [center callExternalMethod:@selector(handleReceivedTextWithCallback) withArguments:nil];
+
+	NSLog(@"LibSMServer_app: Got past message received");
+
+	%orig;
+}*/
 
 %end
 
