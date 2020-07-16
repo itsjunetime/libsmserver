@@ -37,10 +37,6 @@
 
 %hook SMSApplication
 
-/*@interface IPCTextWatcher
-- (void)handleReceivedTextWithCallback;
-@end*/
-
 @interface SMServerIPC : NSObject
 @end
 
@@ -116,26 +112,27 @@
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
 	
-	SMServerIPC* center = [SMServerIPC sharedInstance];
-
-	NSLog(@"LibSMServer_app: Launched application");
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		SMServerIPC* center = [SMServerIPC sharedInstance];
+		NSLog(@"LibSMServer_app: Launched application");
+	});
 
 	return %orig;
 }
 
-/*- (void)_messageReceived:(id)arg1 {
-	/// This will hopefully call something in the app to update the variable for the latest texts, 
-	/// but it's not working right now. Maybe some time in the future.
+- (void)_messageReceived:(id)arg1 {
     
 	NSLog(@"LibSMServer_app: Received a message");
 
-    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-    [center callExternalMethod:@selector(handleReceivedTextWithCallback) withArguments:nil];
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+    	[center callExternalMethod:@selector(handleReceivedTextWithCallback) withArguments:nil];
+	});
 
 	NSLog(@"LibSMServer_app: Got past message received");
 
 	%orig;
-}*/
+}
 
 %end
 

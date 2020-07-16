@@ -12,6 +12,6 @@ This is the companion tweak to my app, [SMServer](https://github.com/iandwelker/
 
 ### To build from source:
 1. Install libmryipc
-2. Copy libmryipc.dylib from your phone into $THEOS/lib (if libmryipc is installed on your iPhone: `scp -C root@<iPhone IP>:/usr/lib/libmryipc.dylib $THEOS/lib/`)
+2. Copy libmryipc.dylib from your phone into $THEOS/lib (if libmryipc is installed on your iPhone: `scp -C root@$THEOS_DEVICE_IP:/usr/lib/libmryipc.dylib $THEOS/lib/`)
 3. Copy the MRYIPC headers from [here](https://github.com/Muirey03/MRYIPC) and place them in $THEOS/include/
 4. cd into the directory of the `Makefile` and run `make package install`
