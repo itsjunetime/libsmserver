@@ -9,7 +9,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = libsmserver
 
-libsmserver_FILES = Tweak.x
+libsmserver_FILES = Tweak.xm
 libsmserver_CFLAGS = -fobjc-arc
 
 libsmserver_LIBRARIES = mryipc
