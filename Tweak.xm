@@ -5,12 +5,16 @@
 + (id)description;
 @end
 
-@interface CKConversationList
-- (id)conversationForExistingChatWithGroupID:(id)arg1;
-+ (id)sharedConversationList;
+@interface __NSCFString
 @end
 
-@interface CKConversation
+@interface CKConversationList
++ (id)sharedConversationList;
+- (id)conversationForExistingChatWithGroupID:(id)arg1;
+- (id)conversationForHandles:(id)arg1 displayName:(id)arg2 joinedChatsOnly:(_Bool)arg3 create:(_Bool)arg4;
+@end
+
+@interface CKConversation : NSObject
 - (id)messageWithComposition:(id)arg1;
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
@@ -41,19 +45,35 @@
 - (id)userInfo;
 @end
 
-@interface IMChat {
+@interface IMChat : NSObject {
 	NSString *_identifier;
 }
+- (void)sendMessage:(id)arg1;
+@end
+
+@interface IMChatRegistry
++ (id)sharedInstance;
+- (id)chatForIMHandle:(id)arg1;
 @end
 
 @interface IMHandle : NSObject {
 	NSString *_id;
 }
+- (id)initWithAccount:(id)arg1 ID:(id)arg2 alreadyCanonical:(_Bool)arg3;
 @end
 
 @interface IMMessage : NSObject {
 	IMHandle *_subject;
 }
++ (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
+@end
+
+@interface IMAccount : NSObject
+@end
+
+@interface IMAccountController : NSObject
++ (id)sharedInstance;
+- (id)mostLoggedInAccount;
 @end
 
 @interface FBProcessManager : NSObject
@@ -99,26 +119,45 @@
 	NSString* body = vals[@"body"];
 	NSString* address = vals[@"address"];
 	
+	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
+	
 	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
 	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
 	
-	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
-	
-	CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
-	CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+	if (conversation != nil) { /// If they've texted this person before
+		CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+		CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
 
-	for (NSString* obj in attachments) {
+		for (NSString* obj in attachments) {
+			
+			NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
+			NSURL *file_url = [NSURL URLWithString:new_string];
+			
+			CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
+			composition = [composition compositionByAppendingMediaObject:object];
+		}
 		
-		NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
-		NSURL *file_url = [NSURL URLWithString:new_string];
+		CKMessage* message = [conversation messageWithComposition:composition];
+
+		[conversation sendMessage:message newComposition:YES];
+
+	} else { /// If they haven't
+
+		IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+		IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
 		
-		CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
-		composition = [composition compositionByAppendingMediaObject:object];
+		__NSCFString *handleId = (__NSCFString *)address;
+		IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+		
+		IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
+		IMChat *chat = [registry chatForIMHandle:handle];
+
+		/// Flags is always just 1048581 in a regular message, with/without images/videos.
+		/// 19922949 with a instant recording
+		IMMessage *immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+
+		[chat sendMessage:immessage];
 	}
-	
-	CKMessage* message = [conversation messageWithComposition:composition];
-
-	[conversation sendMessage:message newComposition:YES];
 }
 
 @end
@@ -170,23 +209,17 @@
 		//NSLog(@"LibSMServer_app: Checking processes: %@, shared: %@, apps: %@, count: %lu", [procs description], [shared description], [apps description], proc.count);
 
 		//if (proc.count != 0) { /// Ideally this would check to make sure SMServer is open before computing, but it's always returning NO so we're not doing that for now.
-			NSLog(@"LibSMServer_app: SMServer app is open, continuing.");
 
 			IMMessage *message = (IMMessage *)[[(NSConcreteNotification *)arg1 userInfo] objectForKey:@"__kIMChatRegistryMessageSentMessageKey"];
-			NSLog(@"LibSMServer_app: got IMMessage: %@", [message description]);
 			
 			IMHandle *handle = MSHookIvar<IMHandle *>(message, "_subject");
-			NSLog(@"LibSMServer_app: got IMHandle: %@", [handle description]);
 
 			NSString *chat_id = MSHookIvar<NSString *>(handle, "_id");
-			NSLog(@"LibSMServer_app: Got chat_id for sent message: %@", chat_id);
 
 			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
 			[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
 		//}
 	});
-
-	NSLog(@"LibSMServer_app: Got past starting async, calling orig.");
 
 	%orig;
 }
@@ -248,7 +281,6 @@
 	NSArray *proc = [[%c(FBProcessManager) sharedInstance] processesForBundleIdentifier:@"com.apple.MobileSMS"];
 	
 	if (proc.count == 0) { /// Always YES rn for some reason
-		NSLog(@"LibSMServer_app: Actually restarting MobileSMS");
 
 		[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 	}
@@ -263,7 +295,6 @@
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	if ([bundleID isEqualToString:@"com.apple.springboard"]) {
-		NSLog(@"LibSMServer_app: called ctor for springboard in %@", bundleID);
 		LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 	}
 }
