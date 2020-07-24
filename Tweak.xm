@@ -17,6 +17,7 @@
 @interface CKConversation : NSObject
 - (id)messageWithComposition:(id)arg1;
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
+- (void)setLocalUserIsTyping:(_Bool)arg1;
 @end
 
 @interface CKComposition : NSObject
@@ -109,6 +110,7 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(sendText:)];
+		[_center addTarget:self action:@selector(setTyping:inConversation:)];
 	}
 	return self;
 }
@@ -160,6 +162,20 @@
 	}
 }
 
+- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
+	NSLog(@"LibSMServer_app: Received typing");
+	_Bool is = [vals[@"isTyping"] isEqualToString:@"YES"]; /// Since you can't directly pass _Bools through NSDictionaries
+	NSString *address = vals[@"address"];
+	NSLog(@"LibSMServer_app: Got vals for typing: %@, %@", is ? @"YES" : @"NO", address);
+
+	CKConversationList *sharedList = [%c(CKConversationList) sharedConversationList];
+	CKConversation *convo =  [sharedList conversationForExistingChatWithGroupID:address];
+	NSLog(@"LibSMServer_app: Got shared list & convo. Sending...");
+
+	[convo setLocalUserIsTyping:is];
+	NSLog(@"LibSMServer_app: Set typing: %@ for address: %@", is ? @"true" : @"false", address);
+}
+
 @end
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
@@ -178,17 +194,14 @@
 	NSLog(@"LibSMServer_app: Received a message");
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-		//NSArray *proc = [[%c(FBProcessManager) sharedInstance] processesForBundleIdentifier:@"com.ianwelker.smserver"];
 
-		//if (proc.count != 0) { /// Ideally this would check to make sure SMServer is open before computing, but it's always returning NO so we're not doing that for now.
-			NSLog(@"LibSMServer_app: Found that SMServer is running, sending IPC...");
+		NSLog(@"LibSMServer_app: Found that SMServer is running, sending IPC...");
 
-			IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
-			NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
+		IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
+		NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
 
-			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-			[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
-		//}
+		MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+		[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
 	});
 
 	NSLog(@"LibSMServer_app: Got past async, calling orig.");
@@ -199,26 +212,20 @@
 - (void)_messageSent:(id)arg1 {
 	NSLog(@"LibSMServer_app: Sent a message: %@", [arg1 description]);
 
-	//NSArray *proc = [[%c(FBProcessManager) sharedInstance] processesForBundleIdentifier:@"com.ianwelker.smserver"];
-	//NSArray *procs = [%c(FBProcessManager) allProcesses];
-	//NSArray *shared = [[%c(FBProcessManager) sharedInstance] allProcesses];
-	//NSArray *apps = [[%c(FBProcessManager) sharedInstance] allApplicationProcesses];
-
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
-		//NSLog(@"LibSMServer_app: Checking processes: %@, shared: %@, apps: %@, count: %lu", [procs description], [shared description], [apps description], proc.count);
-
-		//if (proc.count != 0) { /// Ideally this would check to make sure SMServer is open before computing, but it's always returning NO so we're not doing that for now.
-
-			IMMessage *message = (IMMessage *)[[(NSConcreteNotification *)arg1 userInfo] objectForKey:@"__kIMChatRegistryMessageSentMessageKey"];
+		IMMessage *message = (IMMessage *)[[(NSConcreteNotification *)arg1 userInfo] objectForKey:@"__kIMChatRegistryMessageSentMessageKey"];
 			
+		if (message != nil) {
+
 			IMHandle *handle = MSHookIvar<IMHandle *>(message, "_subject");
 
 			NSString *chat_id = MSHookIvar<NSString *>(handle, "_id");
 
 			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
 			[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
-		//}
+
+		}
 	});
 
 	%orig;
@@ -265,11 +272,7 @@
 - (void)launchSMS {
 	NSLog(@"LibSMServer_app: called LaunchSMS");
 
-	NSArray *proc = [[%c(FBProcessManager) sharedInstance] processesForBundleIdentifier:@"com.apple.MobileSMS"];
-	
-	if (proc.count == 0) { /// Always YES rn for some reason
-		[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
-	}
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
 - (void)relaunchSMServer {
@@ -278,12 +281,7 @@
 	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
 
 	/// Also reopen mobileSMS 'cause it can be shut down if the server is running for too long
-	NSArray *proc = [[%c(FBProcessManager) sharedInstance] processesForBundleIdentifier:@"com.apple.MobileSMS"];
-	
-	if (proc.count == 0) { /// Always YES rn for some reason
-
-		[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
-	}
+	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 }
 
 @end
