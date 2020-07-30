@@ -8,6 +8,14 @@
 @interface __NSCFString
 @end
 
+@interface FBProcessManager
++ (id)sharedInstance;
+- (id)allApplicationProcesses;
+- (id)applicationProcessesForBundleIdentifier:(id)arg1;
+- (id)allProcesses;
+- (id)processesForBundleIdentifier:(id)arg1;
+@end
+
 @interface CKConversationList
 + (id)sharedConversationList;
 - (id)conversationForExistingChatWithGroupID:(id)arg1;
@@ -69,19 +77,14 @@
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
 @end
 
-@interface IMAccount : NSObject
+@interface IMAccount : NSObject {
+	NSString *_loginID;
+}
 @end
 
 @interface IMAccountController : NSObject
 + (id)sharedInstance;
 - (id)mostLoggedInAccount;
-@end
-
-@interface FBProcessManager : NSObject
-+ (id)sharedInstance;
-- (id)allProcesses;
-- (id)processesForBundleIdentifier:(id)arg1;
-- (id)allApplicationProcesses;
 @end
 
 %hook SMSApplication
@@ -120,7 +123,7 @@
 	NSArray* attachments = vals[@"attachment"];
 	NSString* body = vals[@"body"];
 	NSString* address = vals[@"address"];
-	
+
 	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
 	
 	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
@@ -162,7 +165,7 @@
 	}
 }
 
-- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
+/*- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
 	NSLog(@"LibSMServer_app: Received typing");
 	_Bool is = [vals[@"isTyping"] isEqualToString:@"YES"]; /// Since you can't directly pass _Bools through NSDictionaries
 	NSString *address = vals[@"address"];
@@ -174,7 +177,7 @@
 
 	[convo setLocalUserIsTyping:is];
 	NSLog(@"LibSMServer_app: Set typing: %@ for address: %@", is ? @"true" : @"false", address);
-}
+}*/
 
 @end
 
@@ -189,28 +192,35 @@
 	return %orig;
 }
 
+/// Credits to u/abhichaudhari for letting me know about this method
 - (void)_messageReceived:(id)arg1 {
     
 	NSLog(@"LibSMServer_app: Received a message");
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
-		NSLog(@"LibSMServer_app: Found that SMServer is running, sending IPC...");
-
 		IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
 		NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
+		NSMutableString *to_send_chat = [NSMutableString stringWithString:@"any"];
+
+		if (chat_id != nil) {
+			to_send_chat = [NSMutableString stringWithString:chat_id];
+		} else {
+			NSLog(@"LibSMServer_app: received chat_id was nil, chat was %@", [chat description]);
+		}
 
 		MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
+		[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
 	});
 
-	NSLog(@"LibSMServer_app: Got past async, calling orig.");
+	NSLog(@"LibSMServer_app: Got past async in received, calling orig.");
 
 	%orig;
 }
 
 - (void)_messageSent:(id)arg1 {
-	NSLog(@"LibSMServer_app: Sent a message: %@", [arg1 description]);
+
+	NSLog(@"LibSMServer_app: Sent a message.");
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
@@ -220,13 +230,29 @@
 
 			IMHandle *handle = MSHookIvar<IMHandle *>(message, "_subject");
 
-			NSString *chat_id = MSHookIvar<NSString *>(handle, "_id");
+			if (handle != nil) {
 
-			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-			[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
+				NSString *chat_id = MSHookIvar<NSString *>(handle, "_id");
 
+				if (chat_id != nil) { /// Really ugly nested ifs but I think it's the best way to check
+
+					MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+					[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
+
+				} else {
+					NSLog(@"LibSMServer_app: sent cha_id was null, handle was %@", [handle description]);
+				}
+
+			} else {
+				NSLog(@"LibSMServer_app: sent handle was nil, message was %@", [message description]);
+			}
+
+		} else {
+			NSLog(@"LibSMServer_app: sent message was nil, notification was %@", [arg1 description]);
 		}
 	});
+
+	NSLog(@"LibSMServer_app: Got past async in sent, calling orig.");
 
 	%orig;
 }
