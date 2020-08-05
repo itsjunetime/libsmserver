@@ -218,7 +218,7 @@
 	%orig;
 }
 
-- (void)_messageSent:(id)arg1 {
+/*- (void)_messageSent:(id)arg1 {
 
 	NSLog(@"LibSMServer_app: Sent a message.");
 
@@ -255,7 +255,7 @@
 	NSLog(@"LibSMServer_app: Got past async in sent, calling orig.");
 
 	%orig;
-}
+}*/
 
 %end
 
