@@ -166,17 +166,13 @@
 }
 
 /*- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
-	NSLog(@"LibSMServer_app: Received typing");
 	_Bool is = [vals[@"isTyping"] isEqualToString:@"YES"]; /// Since you can't directly pass _Bools through NSDictionaries
 	NSString *address = vals[@"address"];
-	NSLog(@"LibSMServer_app: Got vals for typing: %@, %@", is ? @"YES" : @"NO", address);
 
 	CKConversationList *sharedList = [%c(CKConversationList) sharedConversationList];
 	CKConversation *convo =  [sharedList conversationForExistingChatWithGroupID:address];
-	NSLog(@"LibSMServer_app: Got shared list & convo. Sending...");
 
 	[convo setLocalUserIsTyping:is];
-	NSLog(@"LibSMServer_app: Set typing: %@ for address: %@", is ? @"true" : @"false", address);
 }*/
 
 @end
@@ -217,45 +213,6 @@
 
 	%orig;
 }
-
-/*- (void)_messageSent:(id)arg1 {
-
-	NSLog(@"LibSMServer_app: Sent a message.");
-
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-
-		IMMessage *message = (IMMessage *)[[(NSConcreteNotification *)arg1 userInfo] objectForKey:@"__kIMChatRegistryMessageSentMessageKey"];
-			
-		if (message != nil) {
-
-			IMHandle *handle = MSHookIvar<IMHandle *>(message, "_subject");
-
-			if (handle != nil) {
-
-				NSString *chat_id = MSHookIvar<NSString *>(handle, "_id");
-
-				if (chat_id != nil) { /// Really ugly nested ifs but I think it's the best way to check
-
-					MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-					[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:chat_id];
-
-				} else {
-					NSLog(@"LibSMServer_app: sent cha_id was null, handle was %@", [handle description]);
-				}
-
-			} else {
-				NSLog(@"LibSMServer_app: sent handle was nil, message was %@", [message description]);
-			}
-
-		} else {
-			NSLog(@"LibSMServer_app: sent message was nil, notification was %@", [arg1 description]);
-		}
-	});
-
-	NSLog(@"LibSMServer_app: Got past async in sent, calling orig.");
-
-	%orig;
-}*/
 
 %end
 
