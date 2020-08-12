@@ -1,4 +1,4 @@
-Package: com.janshai.libsmserver
+Package: com.ianwelker.libsmserver
 Name: libsmserver
 Version: 0.2.0
 Architecture: iphoneos-arm

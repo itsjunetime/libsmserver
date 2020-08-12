@@ -1,9 +1,10 @@
-TARGET := iphone:clang:latest:7.0
+TARGET := iphone:clang:latest:13.1
 INSTALL_TARGET_PROCESSES = MobileSMS, SpringBoard
 
-ARCHS = arm64 arm64e
+export ARCHS = arm64 arm64e
 
 GO_EASY_ON_ME = 1
+FOR_RELEASE = 1
 
 include $(THEOS)/makefiles/common.mk
 
