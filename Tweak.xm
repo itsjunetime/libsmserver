@@ -276,6 +276,7 @@
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	if ([bundleID isEqualToString:@"com.apple.springboard"]) {
+		NSLog(@"LibSMServer_app: Running in springboard, creating ipc center");
 		LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
 	}
 }
