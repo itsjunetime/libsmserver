@@ -134,8 +134,12 @@
 		CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
 
 		for (NSString* obj in attachments) {
-			
-			NSString *new_string = [NSString stringWithFormat:@"file://%@", obj];
+
+			NSMutableString* new_string = [obj mutableCopy];
+
+			if (![[obj substringToIndex:7] isEqualToString:@"file://"])
+				new_string = [NSMutableString stringWithFormat:@"file://%@", obj];
+
 			NSURL *file_url = [NSURL URLWithString:new_string];
 			
 			CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
