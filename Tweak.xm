@@ -113,7 +113,11 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(sendText:)];
-		[_center addTarget:self action:@selector(setTyping:inConversation:)];
+		//[_center addTarget:self action:@selector(setTyping:inConversation:)];
+
+		/*UIDevice *device = [UIDevice currentDevice];
+		[device setBatteryMonitoringEnabled:YES];
+		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sendBatteryNotification:) name:UIDeviceBatteryLevelDidChangeNotification object:device];*/
 	}
 	return self;
 }
@@ -179,6 +183,10 @@
 	[convo setLocalUserIsTyping:is];
 }*/
 
+/*- (void)setAllAsRead:(NSString *)chat {
+
+}*/
+
 @end
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
@@ -218,6 +226,13 @@
 	%orig;
 }
 
+/*- (void)sendBatteryNotification:(NSNotification *)notification {
+	NSLog(@"LibSMServer_app: Got battery notification, sending IPC");
+
+	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+	[center callExternalVoidMethod:@selector(handleBatteryChanged) withArguments:nil];
+}*/
+
 %end
 
 %hook Springboard
@@ -232,10 +247,6 @@
 
 @implementation LaunchSMSIPC {
 	MRYIPCCenter* _center;
-}
-
-+(void)load {
-	[self sharedInstance];
 }
 
 +(instancetype)sharedInstance {
