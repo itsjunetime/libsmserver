@@ -96,10 +96,6 @@
 	MRYIPCCenter* _center;
 }
 
-+(void)load {
-	[self sharedInstance];
-}
-
 +(instancetype)sharedInstance {
 	static dispatch_once_t onceToken = 0;
 	__strong static SMServerIPC* sharedInstance = nil;
@@ -270,17 +266,22 @@
 - (void)launchSMS {
 	NSLog(@"LibSMServer_app: called LaunchSMS");
 
-	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+	dispatch_async(dispatch_get_main_queue(), ^{
+	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+	});
 }
 
 - (void)relaunchSMServer {
 	NSLog(@"LibSMServer_app: called relaunchSMServer");
 
-	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+	dispatch_async(dispatch_get_main_queue(), ^{
+	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
 
-	/// Also reopen mobileSMS 'cause it can be shut down if the server is running for too long
-	[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
-}
+	    /// Also reopen mobileSMS 'cause it can be shut down if the server is running for too long
+	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+	});
+
+	}
 
 @end
 

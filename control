@@ -1,6 +1,6 @@
 Package: com.janshai.libsmserver
 Name: libsmserver
-Version: 0.2.2
+Version: 0.2.3
 Architecture: iphoneos-arm
 Description: Support tweak for the SMServer app. Required to send texts.
 Maintainer: Janshai
