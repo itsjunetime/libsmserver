@@ -58,11 +58,13 @@
 	NSString *_identifier;
 }
 - (void)sendMessage:(id)arg1;
+- (void)markAllMessagesAsRead;
 @end
 
 @interface IMChatRegistry
 + (id)sharedInstance;
 - (id)chatForIMHandle:(id)arg1;
+- (id)existingChatWithChatIdentifier:(id)arg1;
 @end
 
 @interface IMHandle : NSObject {
@@ -109,6 +111,7 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(sendText:)];
+		[_center addTarget:self action:@selector(setAllAsRead:)];
 		//[_center addTarget:self action:@selector(setTyping:inConversation:)];
 
 		/*UIDevice *device = [UIDevice currentDevice];
@@ -179,9 +182,10 @@
 	[convo setLocalUserIsTyping:is];
 }*/
 
-/*- (void)setAllAsRead:(NSString *)chat {
-
-}*/
+- (void)setAllAsRead:(NSString *)chat {
+    IMChat *imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:chat];
+    [imchat markAllMessagesAsRead];
+}
 
 @end
 
@@ -214,7 +218,7 @@
 		}
 
 		MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		[center callExternalMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
+		[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
 	});
 
 	NSLog(@"LibSMServer_app: Got past async in received, calling orig.");
