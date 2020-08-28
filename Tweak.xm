@@ -89,6 +89,19 @@
 - (id)mostLoggedInAccount;
 @end
 
+@interface SBApplicationController
++ (id)sharedInstance;
+- (id)applicationWithBundleIdentifier:(id)arg1;
+@end
+
+@interface SBApplicationProcessState
+@property(readonly, nonatomic, getter=isRunning) _Bool running;
+@end
+
+@interface SBApplication
+@property(readonly, nonatomic) SBApplicationProcessState *processState;
+@end
+
 %hook SMSApplication
 
 @interface SMServerIPC : NSObject
@@ -187,6 +200,13 @@
     [imchat markAllMessagesAsRead];
 }
 
+/*- (void)sendBatteryNotification:(NSNotification *)notification {
+	NSLog(@"LibSMServer_app: Got battery notification, sending IPC");
+
+	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+	[center callExternalVoidMethod:@selector(handleBatteryChanged) withArguments:nil];
+}*/
+
 @end
 
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
@@ -207,31 +227,28 @@
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
-		IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
-		NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
-		NSMutableString *to_send_chat = [NSMutableString stringWithString:@"any"];
+		MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
+		_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] isEqualToString:@"YES"];
 
-		if (chat_id != nil) {
-			to_send_chat = [NSMutableString stringWithString:chat_id];
-		} else {
-			NSLog(@"LibSMServer_app: received chat_id was nil, chat was %@", [chat description]);
+		if (isRunning) {
+		    IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
+		    NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
+		    NSMutableString *to_send_chat = [NSMutableString stringWithString:@"any"];
+
+		    if (chat_id != nil) {
+			    to_send_chat = [NSMutableString stringWithString:chat_id];
+		    } else {
+			    NSLog(@"LibSMServer_app: received chat_id was nil, chat was %@", [chat description]);
+		    }
+
+		    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+		    [center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
 		}
-
-		MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
 	});
-
-	NSLog(@"LibSMServer_app: Got past async in received, calling orig.");
 
 	%orig;
 }
 
-/*- (void)sendBatteryNotification:(NSNotification *)notification {
-	NSLog(@"LibSMServer_app: Got battery notification, sending IPC");
-
-	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-	[center callExternalVoidMethod:@selector(handleBatteryChanged) withArguments:nil];
-}*/
 
 %end
 
@@ -261,31 +278,28 @@
 -(instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
-		[_center addTarget:self action:@selector(launchSMS)];
-		[_center addTarget:self action:@selector(relaunchSMServer)];
+		[_center addTarget:self action:@selector(launchSMS:)];
+		[_center addTarget:self action:@selector(checkIfRunning:)];
 	}
 	return self;
 }
 
-- (void)launchSMS {
-	NSLog(@"LibSMServer_app: called LaunchSMS");
+- (void)launchSMS:(NSString *)andSMServer {
+	NSLog(@"LibSMServer_app: called LaunchSMS, %@", andSMServer);
 
 	dispatch_async(dispatch_get_main_queue(), ^{
 	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+
+	    if ([andSMServer isEqualToString:@"YES"])
+		[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+
 	});
 }
 
-- (void)relaunchSMServer {
-	NSLog(@"LibSMServer_app: called relaunchSMServer");
-
-	dispatch_async(dispatch_get_main_queue(), ^{
-	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
-
-	    /// Also reopen mobileSMS 'cause it can be shut down if the server is running for too long
-	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
-	});
-
-	}
+- (NSString *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs 
+	SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundle_id];
+	return app.processState != nil ? @"YES" : @"NO";
+}
 
 @end
 
