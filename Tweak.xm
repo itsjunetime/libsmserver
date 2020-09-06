@@ -1,108 +1,6 @@
 #import <MRYIPCCenter.h>
 #import "substrate.h"
-
-@interface NSObject (Undocumented)
-+ (id)description;
-@end
-
-@interface __NSCFString
-@end
-
-@interface FBProcessManager
-+ (id)sharedInstance;
-- (id)allApplicationProcesses;
-- (id)applicationProcessesForBundleIdentifier:(id)arg1;
-- (id)allProcesses;
-- (id)processesForBundleIdentifier:(id)arg1;
-@end
-
-@interface CKConversationList
-+ (id)sharedConversationList;
-- (id)conversationForExistingChatWithGroupID:(id)arg1;
-- (id)conversationForHandles:(id)arg1 displayName:(id)arg2 joinedChatsOnly:(_Bool)arg3 create:(_Bool)arg4;
-@end
-
-@interface CKConversation : NSObject
-- (id)messageWithComposition:(id)arg1;
-- (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
-- (void)setLocalUserIsTyping:(_Bool)arg1;
-@end
-
-@interface CKComposition : NSObject
-- (id)initWithText:(id)arg1 subject:(id)arg2;
-- (id)compositionByAppendingMediaObject:(id)arg1;
-@end
-
-@interface CKMessage
-@end
-
-@interface CKMediaObject : NSObject
-@end
-
-@interface CKMediaObjectManager : NSObject
-+ (id)sharedInstance;
-- (id)mediaObjectWithFileURL:(id)arg1 filename:(id)arg2 transcoderUserInfo:(id)arg3 attributionInfo:(id)arg4 hideAttachment:(_Bool)arg5;
-@end
-
-@interface UIApplication (Undocumented)
-- (_Bool)launchApplicationWithIdentifier:(id)arg1 suspended:(_Bool)arg2;
-+ (id)sharedApplication;
-@end
-
-@interface NSConcreteNotification
-- (id)object;
-- (id)userInfo;
-@end
-
-@interface IMChat : NSObject {
-	NSString *_identifier;
-}
-- (void)sendMessage:(id)arg1;
-- (void)markAllMessagesAsRead;
-@end
-
-@interface IMChatRegistry
-+ (id)sharedInstance;
-- (id)chatForIMHandle:(id)arg1;
-- (id)existingChatWithChatIdentifier:(id)arg1;
-@end
-
-@interface IMHandle : NSObject {
-	NSString *_id;
-}
-- (id)initWithAccount:(id)arg1 ID:(id)arg2 alreadyCanonical:(_Bool)arg3;
-@end
-
-@interface IMMessage : NSObject {
-	IMHandle *_subject;
-}
-+ (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
-@end
-
-@interface IMAccount : NSObject {
-	NSString *_loginID;
-}
-@end
-
-@interface IMAccountController : NSObject
-+ (id)sharedInstance;
-- (id)mostLoggedInAccount;
-@end
-
-@interface SBApplicationController
-+ (id)sharedInstance;
-- (id)applicationWithBundleIdentifier:(id)arg1;
-@end
-
-@interface SBApplicationProcessState
-@property(readonly, nonatomic, getter=isRunning) _Bool running;
-@end
-
-@interface SBApplication
-@property(readonly, nonatomic) SBApplicationProcessState *processState;
-@end
-
-%hook SMSApplication
+#import "Tweak.h"
 
 @interface SMServerIPC : NSObject
 @end
@@ -209,15 +107,18 @@
 
 @end
 
+%hook SMSApplication
+
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
-	
+	_Bool orig = %orig;
+
+	NSLog(@"LibSMServer_app: You launched SMSApplication! Woohoo!");
+
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 		SMServerIPC* center = [SMServerIPC sharedInstance];
 	});
 
-	NSLog(@"LibSMServer_app: Launched application");
-
-	return %orig;
+	return orig;
 }
 
 /// Credits to u/abhichaudhari for letting me know about this method
@@ -249,15 +150,7 @@
 	%orig;
 }
 
-
 %end
-
-%hook Springboard
-
-@interface NSBundle (Undocumented)
-+ (id)mainBundle;
-@property (readonly, copy) NSString *bundleIdentifier;
-@end
 
 @interface LaunchSMSIPC : NSObject
 @end
@@ -266,7 +159,7 @@
 	MRYIPCCenter* _center;
 }
 
-+(instancetype)sharedInstance {
++ (instancetype)sharedInstance {
 	static dispatch_once_t onceToken = 0;
 	__strong static LaunchSMSIPC* sharedInstance = nil;
 	dispatch_once(&onceToken, ^{
@@ -275,24 +168,30 @@
 	return sharedInstance;
 }
 
--(instancetype)init {
+- (instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
-		[_center addTarget:self action:@selector(launchSMS:)];
+		[_center addTarget:self action:@selector(launchSMS)];
+		[_center addTarget:self action:@selector(relaunchSMServer)];
 		[_center addTarget:self action:@selector(checkIfRunning:)];
 	}
 	return self;
 }
 
-- (void)launchSMS:(NSString *)andSMServer {
-	NSLog(@"LibSMServer_app: called LaunchSMS, %@", andSMServer);
+- (void)launchSMS {
+	NSLog(@"LibSMServer_app: called LaunchSMS");
 
 	dispatch_async(dispatch_get_main_queue(), ^{
 	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
+	});
+}
 
-	    if ([andSMServer isEqualToString:@"YES"])
-		[[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+- (void)relaunchSMServer {
+	NSLog(@"LibSMServer_app: called relaunchSMServer");
 
+	dispatch_async(dispatch_get_main_queue(), ^{
+	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
+	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 	});
 }
 
@@ -302,8 +201,6 @@
 }
 
 @end
-
-%end
 
 %ctor {
 	
