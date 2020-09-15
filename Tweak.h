@@ -2,13 +2,16 @@
 + (id)description;
 @end
 
+@interface __NSDictionaryM
++ (id)dictionary;
+@end
+
 @interface __NSCFString
 @end
 
 @interface CKConversationList
 + (id)sharedConversationList;
 - (id)conversationForExistingChatWithGroupID:(id)arg1;
-- (id)conversationForHandles:(id)arg1 displayName:(id)arg2 joinedChatsOnly:(_Bool)arg3 create:(_Bool)arg4;
 @end
 
 @interface CKConversation : NSObject
@@ -35,7 +38,6 @@
 
 @interface UIApplication (Undocumented)
 + (id)sharedApplication;
-+ (id)displayIdentifier;
 - (_Bool)launchApplicationWithIdentifier:(id)arg1 suspended:(_Bool)arg2;
 @end
 
@@ -49,6 +51,7 @@
 }
 - (void)sendMessage:(id)arg1;
 - (void)markAllMessagesAsRead;
+- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 withGuid:(id)arg4;
 @end
 
 @interface IMChatRegistry
@@ -57,15 +60,24 @@
 - (id)existingChatWithChatIdentifier:(id)arg1;
 @end
 
+@interface IMChatHistoryController
++ (id)sharedInstance;
+- (void)loadMessageWithGUID:(id)arg1 completionBlock:(void(^)(id))arg2;
+@end
+
 @interface IMHandle : NSObject {
 	NSString *_id;
 }
 - (id)initWithAccount:(id)arg1 ID:(id)arg2 alreadyCanonical:(_Bool)arg3;
 @end
 
+@interface IMMessageItem
+@end
+
 @interface IMMessage : NSObject {
 	IMHandle *_subject;
 }
+@property(readonly, nonatomic) IMMessageItem *_imMessageItem;
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
 @end
 
@@ -85,7 +97,6 @@
 @end
 
 @interface SBApplicationProcessState
-@property(readonly, nonatomic, getter=isRunning) _Bool running;
 @end
 
 @interface SBApplication

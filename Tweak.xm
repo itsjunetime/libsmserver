@@ -23,6 +23,7 @@
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(sendText:)];
 		[_center addTarget:self action:@selector(setAllAsRead:)];
+		//[_center addTarget:self action:@selector(sendReaction:)];
 		//[_center addTarget:self action:@selector(setTyping:inConversation:)];
 
 		/*UIDevice *device = [UIDevice currentDevice];
@@ -34,53 +35,49 @@
 
 - (void)sendText:(NSDictionary *)vals {
 
-	NSArray* attachments = vals[@"attachment"];
-	NSString* body = vals[@"body"];
-	NSString* address = vals[@"address"];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		NSArray* attachments = vals[@"attachment"];
+		NSString* body = vals[@"body"];
+		NSString* address = vals[@"address"];
 
-	NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
-	
-	CKConversationList* list = [%c(CKConversationList) sharedConversationList];
-	CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
-	
-	if (conversation != nil) { /// If they've texted this person before
-		CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
-		CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+		NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
+		
+		CKConversationList* list = [%c(CKConversationList) sharedConversationList];
+		CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+		
+		if (conversation != nil) { /// If they've texted this person before
+			CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+			CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
 
-		for (NSString* obj in attachments) {
+			for (NSString* obj in attachments) {
 
-			NSMutableString* new_string = [obj mutableCopy];
+				NSURL *file_url = [NSURL fileURLWithPath:obj];
+				id object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:[%c(__NSDictionaryM) dictionary] attributionInfo:@{} hideAttachment:NO];
 
-			if (![[obj substringToIndex:7] isEqualToString:@"file://"])
-				new_string = [NSMutableString stringWithFormat:@"file://%@", obj];
+				composition = [composition compositionByAppendingMediaObject:object];
+			}
 
-			NSURL *file_url = [NSURL URLWithString:new_string];
+			CKMessage* message = [conversation messageWithComposition:composition];
+			[conversation sendMessage:message newComposition:YES];
+
+		} else { /// If they haven't
+
+			IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+			IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
 			
-			CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:nil attributionInfo:@{} hideAttachment:NO];
-			composition = [composition compositionByAppendingMediaObject:object];
+			__NSCFString *handleId = (__NSCFString *)address;
+			IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+			
+			IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
+			IMChat *chat = [registry chatForIMHandle:handle];
+
+			/// Flags is always just 1048581 in a regular message, with/without images/videos.
+			/// 19922949 with a instant recording
+			IMMessage *immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+
+			[chat sendMessage:immessage];
 		}
-		
-		CKMessage* message = [conversation messageWithComposition:composition];
-
-		[conversation sendMessage:message newComposition:YES];
-
-	} else { /// If they haven't
-
-		IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
-		IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
-		
-		__NSCFString *handleId = (__NSCFString *)address;
-		IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
-		
-		IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
-		IMChat *chat = [registry chatForIMHandle:handle];
-
-		/// Flags is always just 1048581 in a regular message, with/without images/videos.
-		/// 19922949 with a instant recording
-		IMMessage *immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
-
-		[chat sendMessage:immessage];
-	}
+	});
 }
 
 /*- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
@@ -99,10 +96,28 @@
 }
 
 /*- (void)sendBatteryNotification:(NSNotification *)notification {
-	NSLog(@"LibSMServer_app: Got battery notification, sending IPC");
-
 	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
 	[center callExternalVoidMethod:@selector(handleBatteryChanged) withArguments:nil];
+}*/
+
+/*- (void)sendReaction:(NSDictionary *)vals {
+    NSString *address = vals[@"chat"];
+    NSString *guid = vals[@"guid"];
+    long long int reaction = [vals[@"reaction"] longLongValue];
+
+    IMChat *chat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:address];
+
+    __block id item = nil;
+    [[%c(IMChatHistoryController) sharedInstance] loadMessageWithGUID:guid completionBlock: ^(id msg){
+	item = ((IMMessage *)msg)._imMessageItem;
+    }];
+
+    NSLog(@"LibSMServer_app: got item, is %@, class is %@", item, [item class]);
+
+    /// Beware: `item` is not the correct type for the following function. I don't know what the correct type is.
+    [chat sendMessageAcknowledgment:reaction forChatItem:item withMessageSummaryInfo:nil]; 
+
+    NSLog(@"LibSMServer_app: Sent reaction");
 }*/
 
 @end
@@ -112,7 +127,7 @@
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
 	_Bool orig = %orig;
 
-	NSLog(@"LibSMServer_app: You launched SMSApplication! Woohoo!");
+	NSLog(@"LibSMServer_app: Launched MobileSMS");
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 		SMServerIPC* center = [SMServerIPC sharedInstance];
@@ -172,7 +187,6 @@
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
 		[_center addTarget:self action:@selector(launchSMS)];
-		[_center addTarget:self action:@selector(relaunchSMServer)];
 		[_center addTarget:self action:@selector(checkIfRunning:)];
 	}
 	return self;
@@ -186,21 +200,31 @@
 	});
 }
 
-- (void)relaunchSMServer {
-	NSLog(@"LibSMServer_app: called relaunchSMServer");
-
-	dispatch_async(dispatch_get_main_queue(), ^{
-	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.ianwelker.smserver" suspended:YES];
-	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
-	});
-}
-
 - (NSString *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs 
 	SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundle_id];
 	return app.processState != nil ? @"YES" : @"NO";
 }
 
 @end
+
+/*
+Sending acknowledgments --
+    To send:
+	Love: 2000
+	Thumbs up: 2001
+	Thumbs down: 2002
+	Haha: 2003
+	Exclamation: 2004
+	Question: 2005
+    To remove:
+	Love: 3000
+	Thumbs up: 3001
+	Thumbs down: 3002
+	etc
+    To send uses sendMessageAcknowledgement:(long long)arg1 forChatItem:(IMTextMessagePartChatItem *(?))arg2 withMessageSummaryInfo:(idk? always shows `<decode: missing data>`)arg3 withGuid:(idk? shows same as wMSI)arg4;
+
+    You can get an IMItem with [[%c(IMChatHistoryController) sharedInstance] loadMessageWithGUID:...], use that somehow to pass into the other function
+*/
 
 %ctor {
 	
