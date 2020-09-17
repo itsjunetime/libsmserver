@@ -26,9 +26,6 @@
 		//[_center addTarget:self action:@selector(sendReaction:)];
 		//[_center addTarget:self action:@selector(setTyping:inConversation:)];
 
-		/*UIDevice *device = [UIDevice currentDevice];
-		[device setBatteryMonitoringEnabled:YES];
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sendBatteryNotification:) name:UIDeviceBatteryLevelDidChangeNotification object:device];*/
 	}
 	return self;
 }
@@ -39,14 +36,21 @@
 		NSArray* attachments = vals[@"attachment"];
 		NSString* body = vals[@"body"];
 		NSString* address = vals[@"address"];
+		NSString* sub = vals[@"subject"];
 
-		NSAttributedString* text = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"%@", body]];
-		
+		NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
+		NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
+
 		CKConversationList* list = [%c(CKConversationList) sharedConversationList];
 		CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
 		
 		if (conversation != nil) { /// If they've texted this person before
-			CKComposition* composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+			CKComposition* composition;
+			if ([subject length] > 0) 
+				composition = [[%c(CKComposition) alloc] initWithText:text subject:subject];
+			else
+				composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+
 			CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
 
 			for (NSString* obj in attachments) {
@@ -95,11 +99,6 @@
     [imchat markAllMessagesAsRead];
 }
 
-/*- (void)sendBatteryNotification:(NSNotification *)notification {
-	MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-	[center callExternalVoidMethod:@selector(handleBatteryChanged) withArguments:nil];
-}*/
-
 /*- (void)sendReaction:(NSDictionary *)vals {
     NSString *address = vals[@"chat"];
     NSString *guid = vals[@"guid"];
@@ -107,15 +106,25 @@
 
     IMChat *chat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:address];
 
-    __block id item = nil;
+    NSLog(@"LibSMServer_app: Got chat: %@, items: %@", chat, [chat chatItems]);
+
+    __block IMMessage *item = nil;
     [[%c(IMChatHistoryController) sharedInstance] loadMessageWithGUID:guid completionBlock: ^(id msg){
-	item = ((IMMessage *)msg)._imMessageItem;
+	item = msg;
     }];
+
+    /// Maybe iterate through chat.chatItems until you find the right guid, then select that one?
+
+    while (item == nil) {};
 
     NSLog(@"LibSMServer_app: got item, is %@, class is %@", item, [item class]);
 
+    IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc] _initWithItem:item._imMessageItem text:item.text index:0 messagePartRange:item.associatedMessageRange subject:item.messageSubject];
+
+    NSLog(@"LibSMServer_app: Got item: %@", pci);
+
     /// Beware: `item` is not the correct type for the following function. I don't know what the correct type is.
-    [chat sendMessageAcknowledgment:reaction forChatItem:item withMessageSummaryInfo:nil]; 
+    [chat sendMessageAcknowledgment:reaction forChatItem:pci withMessageSummaryInfo:nil]; 
 
     NSLog(@"LibSMServer_app: Sent reaction");
 }*/
@@ -127,8 +136,6 @@
 - (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
 	_Bool orig = %orig;
 
-	NSLog(@"LibSMServer_app: Launched MobileSMS");
-
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 		SMServerIPC* center = [SMServerIPC sharedInstance];
 	});
@@ -139,8 +146,6 @@
 /// Credits to u/abhichaudhari for letting me know about this method
 - (void)_messageReceived:(id)arg1 {
     
-	NSLog(@"LibSMServer_app: Received a message");
-
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 		MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
@@ -206,6 +211,22 @@
 }
 
 @end
+
+/*%hook IMChat
+
+- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 withGuid:(id)arg4 {
+    [[arg2 description] writeToFile:@"/var/mobile/Documents/smserver.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    NSLog(@"LibSMServer_app: sendMessageAcknowledgment: %llu forChatItem: %@ withMessageSummaryInfo: %@ withGuid: %@", arg1, arg2, arg3, arg4);
+    %orig;
+}
+
+- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 {
+    [[arg2 description] writeToFile:@"/var/mobile/Documents/smservernone.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    NSLog(@"LibSMServer_app: sendMessageAcknowledgment: %llu forChatItem: %@ withMessageSummaryInfo: %@", arg1, arg2, arg3);
+    %orig;
+}
+
+%end*/
 
 /*
 Sending acknowledgments --

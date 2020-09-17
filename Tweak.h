@@ -51,7 +51,7 @@
 }
 - (void)sendMessage:(id)arg1;
 - (void)markAllMessagesAsRead;
-- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 withGuid:(id)arg4;
+- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3;
 @end
 
 @interface IMChatRegistry
@@ -77,7 +77,6 @@
 @interface IMMessage : NSObject {
 	IMHandle *_subject;
 }
-@property(readonly, nonatomic) IMMessageItem *_imMessageItem;
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
 @end
 
