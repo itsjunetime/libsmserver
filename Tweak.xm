@@ -9,7 +9,7 @@
 	MRYIPCCenter* _center;
 }
 
-+(instancetype)sharedInstance {
++ (instancetype)sharedInstance {
 	static dispatch_once_t onceToken = 0;
 	__strong static SMServerIPC* sharedInstance = nil;
 	dispatch_once(&onceToken, ^{
@@ -18,85 +18,153 @@
 	return sharedInstance;
 }
 
--(instancetype)init {
+- (instancetype)init {
 	if ((self = [super init])) {
 		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 		[_center addTarget:self action:@selector(sendText:)];
 		[_center addTarget:self action:@selector(setAllAsRead:)];
+		[_center addTarget:self action:@selector(getPinnedChats)];
+		[_center addTarget:self action:@selector(launchSMS)];
+		[_center addTarget:self action:@selector(checkIfRunning:)];
 		//[_center addTarget:self action:@selector(sendReaction:)];
-		//[_center addTarget:self action:@selector(setTyping:inConversation:)];
-
 	}
 	return self;
 }
 
 - (void)sendText:(NSDictionary *)vals {
 
+	/// You have to run this on main thread to do the `mediaObjectWithFileURL` bit
 	dispatch_async(dispatch_get_main_queue(), ^{
-		NSArray* attachments = vals[@"attachment"];
-		NSString* body = vals[@"body"];
-		NSString* address = vals[@"address"];
-		NSString* sub = vals[@"subject"];
+	    IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
-		NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
-		NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
+	    if ([controller connectToDaemon]) {
+		    [controller sendQueryWithReply:NO query: ^{
+			    NSArray* attachments = vals[@"attachment"];
+			    NSString* body = vals[@"body"];
+			    NSString* address = vals[@"address"];
+			    NSString* sub = vals[@"subject"];
 
-		CKConversationList* list = [%c(CKConversationList) sharedConversationList];
-		CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
-		
-		if (conversation != nil) { /// If they've texted this person before
-			CKComposition* composition;
-			if ([subject length] > 0) 
-				composition = [[%c(CKComposition) alloc] initWithText:text subject:subject];
-			else
-				composition = [[%c(CKComposition) alloc] initWithText:text subject:nil];
+			    NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
+			    NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
 
-			CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+				/*
+			    IMChatRegistry* registry = [%c(IMChatRegistry) sharedInstance];
+			    IMChat* chat = [registry existingChatWithChatIdentifier:(__NSCFString *)address];
 
-			for (NSString* obj in attachments) {
+			    if (chat == nil) {
+				    IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+				    IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
+				    
+				    __NSCFString *handleId = (__NSCFString *)address;
+				    IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+				    
+				    chat = [registry chatForIMHandle:handle];
+			    }
 
-				NSURL *file_url = [NSURL fileURLWithPath:obj];
-				id object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:[%c(__NSDictionaryM) dictionary] attributionInfo:@{} hideAttachment:NO];
+			    NSMutableArray* attachmentFileGuids = [NSMutableArray array];
+				NSMutableArray* attachmentFiles = [NSMutableArray array];
 
-				composition = [composition compositionByAppendingMediaObject:object];
-			}
+			    if ([attachments count] > 0)  {
+				    CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+					IMFileTransferCenter* transferCenter = [%c(IMFileTransferCenter) sharedInstance];
 
-			CKMessage* message = [conversation messageWithComposition:composition];
-			[conversation sendMessage:message newComposition:YES];
+				    for (NSString* obj in attachments) {
+					    NSURL* fileURL = [NSURL fileURLWithPath:obj];
+					    CKMediaObject* object = [si mediaObjectWithFileURL:fileURL filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
+						IMFileTransfer* transfer = [transferCenter transferForGUID:[object transferGUID] includeRemoved:YES];
 
-		} else { /// If they haven't
+						[transferCenter _addTransfer:transfer];
 
-			IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
-			IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
-			
-			__NSCFString *handleId = (__NSCFString *)address;
-			IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
-			
-			IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
-			IMChat *chat = [registry chatForIMHandle:handle];
+					    [attachmentFileGuids addObject:[object transferGUID]];	
+						[attachmentFiles addObject:transfer];
+				    }
+			    }
 
-			/// Flags is always just 1048581 in a regular message, with/without images/videos.
-			/// 19922949 with a instant recording
-			IMMessage *immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+				BOOL filesReady = NO;
+				
+				while (!filesReady && [attachmentFiles count] > 0) {
+					filesReady = YES;
+					for (IMFileTransfer* obj in attachmentFiles) {
+						if (!obj.isFinished) filesReady = NO;
+					}
+					[NSThread sleepForTimeInterval:0.2f];
+				}
 
-			[chat sendMessage:immessage];
+			    IMMessage *message;
+
+			    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0) {
+				    if ([attachmentFileGuids count] > 0)
+					    message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581 threadIdentifier:nil];
+				    else
+					    message = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
+			    } else {
+				    if ([attachmentFileGuids count] > 0)
+					    message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581];
+				    else
+					    message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+			    }
+
+			    [chat sendMessage:message];
+				*/
+
+			    CKConversationList* list = [%c(CKConversationList) sharedConversationList];
+			    CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+
+			    if (conversation != nil) {
+				    CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:text subject:([subject length] > 0 ? subject : nil)];
+
+				    CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+
+				    for (NSString* obj in attachments) {
+
+					    NSURL* file_url = [NSURL fileURLWithPath:obj];
+					    CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
+
+					    composition = [composition compositionByAppendingMediaObject:object];
+				    }
+
+				    IMMessage* message = [conversation messageWithComposition:composition];
+				    [conversation sendMessage:message newComposition:YES];
+
+			    } else {
+
+				    IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+				    IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
+				    
+				    __NSCFString *handleId = (__NSCFString *)address;
+				    IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+				    
+				    IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
+				    IMChat *chat = [registry chatForIMHandle:handle];
+
+				    IMMessage* immessage;
+				    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0)
+						immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
+				    else
+						immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+
+				    [chat sendMessage:immessage];
+			    }
+
+			}];
+		} else {
+			NSLog(@"LibSMServer_app: Failed to connect to daemon");
 		}
 	});
+
 }
 
-/*- (void)setTyping:(NSDictionary *)vals { /// Will be used when I implement typing indicators
-	_Bool is = [vals[@"isTyping"] isEqualToString:@"YES"]; /// Since you can't directly pass _Bools through NSDictionaries
-	NSString *address = vals[@"address"];
-
-	CKConversationList *sharedList = [%c(CKConversationList) sharedConversationList];
-	CKConversation *convo =  [sharedList conversationForExistingChatWithGroupID:address];
-
-	[convo setLocalUserIsTyping:is];
-}*/
-
 - (void)setAllAsRead:(NSString *)chat {
-    IMChat *imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:chat];
-    [imchat markAllMessagesAsRead];
+	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
+
+	if ([controller connectToDaemon]) {
+		[controller sendQueryWithReply:NO query: ^{
+			IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:(__NSCFString *)chat];
+			[imchat markAllMessagesAsRead];
+		}];
+	} else {
+		NSLog(@"LibSMServer_app: Couldn't connect to daemon to set %@ as read", chat);
+	}	
 }
 
 /*- (void)sendReaction:(NSDictionary *)vals {
@@ -106,22 +174,14 @@
 
     IMChat *chat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:address];
 
-    NSLog(@"LibSMServer_app: Got chat: %@, items: %@", chat, [chat chatItems]);
-
     __block IMMessage *item = nil;
     [[%c(IMChatHistoryController) sharedInstance] loadMessageWithGUID:guid completionBlock: ^(id msg){
 	item = msg;
     }];
 
-    /// Maybe iterate through chat.chatItems until you find the right guid, then select that one?
-
     while (item == nil) {};
 
-    NSLog(@"LibSMServer_app: got item, is %@, class is %@", item, [item class]);
-
     IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc] _initWithItem:item._imMessageItem text:item.text index:0 messagePartRange:item.associatedMessageRange subject:item.messageSubject];
-
-    NSLog(@"LibSMServer_app: Got item: %@", pci);
 
     /// Beware: `item` is not the correct type for the following function. I don't know what the correct type is.
     [chat sendMessageAcknowledgment:reaction forChatItem:pci withMessageSummaryInfo:nil]; 
@@ -129,77 +189,18 @@
     NSLog(@"LibSMServer_app: Sent reaction");
 }*/
 
-@end
+- (NSArray *)getPinnedChats {
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0) {
+		IMPinnedConversationsController* pinnedController = [%c(IMPinnedConversationsController) sharedInstance];
+		NSOrderedSet* set = [pinnedController pinnedConversationIdentifierSet];
 
-%hook SMSApplication
-
-- (_Bool)application:(id)arg1 didFinishLaunchingWithOptions:(id)arg2 {
-	_Bool orig = %orig;
-
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-		SMServerIPC* center = [SMServerIPC sharedInstance];
-	});
-
-	return orig;
-}
-
-/// Credits to u/abhichaudhari for letting me know about this method
-- (void)_messageReceived:(id)arg1 {
+		return [set array];
+    } 
     
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-
-		MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
-		_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] isEqualToString:@"YES"];
-
-		if (isRunning) {
-		    IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
-		    NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
-		    NSMutableString *to_send_chat = [NSMutableString stringWithString:@"any"];
-
-		    if (chat_id != nil) {
-			    to_send_chat = [NSMutableString stringWithString:chat_id];
-		    } else {
-			    NSLog(@"LibSMServer_app: received chat_id was nil, chat was %@", [chat description]);
-		    }
-
-		    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		    [center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
-		}
-	});
-
-	%orig;
-}
-
-%end
-
-@interface LaunchSMSIPC : NSObject
-@end
-
-@implementation LaunchSMSIPC {
-	MRYIPCCenter* _center;
-}
-
-+ (instancetype)sharedInstance {
-	static dispatch_once_t onceToken = 0;
-	__strong static LaunchSMSIPC* sharedInstance = nil;
-	dispatch_once(&onceToken, ^{
-		sharedInstance = [[self alloc] init];
-	});
-	return sharedInstance;
-}
-
-- (instancetype)init {
-	if ((self = [super init])) {
-		_center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverLaunch"];
-		[_center addTarget:self action:@selector(launchSMS)];
-		[_center addTarget:self action:@selector(checkIfRunning:)];
-	}
-	return self;
+    return [NSArray array];
 }
 
 - (void)launchSMS {
-	NSLog(@"LibSMServer_app: called LaunchSMS");
-
 	dispatch_async(dispatch_get_main_queue(), ^{
 	    [[UIApplication sharedApplication] launchApplicationWithIdentifier:@"com.apple.MobileSMS" suspended:YES];
 	});
@@ -212,21 +213,78 @@
 
 @end
 
-/*%hook IMChat
+%hook SMSApplication
 
-- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 withGuid:(id)arg4 {
-    [[arg2 description] writeToFile:@"/var/mobile/Documents/smserver.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    NSLog(@"LibSMServer_app: sendMessageAcknowledgment: %llu forChatItem: %@ withMessageSummaryInfo: %@ withGuid: %@", arg1, arg2, arg3, arg4);
-    %orig;
+/// Credits to u/abhichaudhari for letting me know about this method
+- (void)_messageReceived:(id)arg1 {
+
+	%orig;
+    
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+
+		MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
+		_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] isEqualToString:@"YES"];
+
+		if (isRunning) {
+		    IMChat *chat = (IMChat *)[(NSConcreteNotification *)arg1 object];
+		    NSString *chat_id = MSHookIvar<NSString *>(chat, "_identifier");
+		    NSMutableString *to_send_chat = [NSMutableString stringWithString:@"any"];
+
+		    if (chat_id != nil)
+			    to_send_chat = [NSMutableString stringWithString:chat_id];
+		    else
+			    NSLog(@"LibSMServer_app: received chat_id was nil, chat was %@", [chat description]);
+
+		    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+		    [center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:to_send_chat];
+		}
+	});
 }
 
-- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3 {
-    [[arg2 description] writeToFile:@"/var/mobile/Documents/smservernone.log" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    NSLog(@"LibSMServer_app: sendMessageAcknowledgment: %llu forChatItem: %@ withMessageSummaryInfo: %@", arg1, arg2, arg3);
-    %orig;
+%end
+
+%hook IMTypingChatItem 
+
+- (id)_initWithItem:(id)arg1 {
+	/// This is called when another party starts typing :)
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+
+		MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
+		_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] isEqualToString:@"YES"];
+
+		if (isRunning) {
+			NSString* chat = [(IMMessageItem *)arg1 sender];
+
+		    MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+		    [center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:chat];
+		}
+	});
+
+	return %orig;
 }
 
-%end*/
+%end
+
+%hook IMDaemonController
+
+/// This allows any process to communicate with imagent
+- (unsigned)_capabilities {
+	NSString *process = [[NSProcessInfo processInfo] processName];
+	if ([process isEqualToString:@"SpringBoard"] || [process isEqualToString:@"MobileSMS"])
+		return 17159;
+	else
+		return %orig;
+}
+
+- (unsigned) _gMyFZListenerCapabilities {
+	NSString *process = [[NSProcessInfo processInfo] processName];
+	if ([process isEqualToString:@"SpringBoard"] || [process isEqualToString:@"MobileSMS"])
+		return 17159;
+	else
+		return %orig;
+}
+
+%end
 
 /*
 Sending acknowledgments --
@@ -252,7 +310,6 @@ Sending acknowledgments --
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	if ([bundleID isEqualToString:@"com.apple.springboard"]) {
-		NSLog(@"LibSMServer_app: Running in springboard, creating ipc center");
-		LaunchSMSIPC* center = [LaunchSMSIPC sharedInstance];
+		SMServerIPC* smsCenter = [SMServerIPC sharedInstance];
 	}
 }
