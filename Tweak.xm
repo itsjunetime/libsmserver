@@ -32,121 +32,116 @@
 }
 
 - (void)sendText:(NSDictionary *)vals {
-
 	/// You have to run this on main thread to do the `mediaObjectWithFileURL` bit
 	dispatch_async(dispatch_get_main_queue(), ^{
-	    IMDaemonController* controller = [%c(IMDaemonController) sharedController];
+		IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
-	    if ([controller connectToDaemon]) {
-		    [controller sendQueryWithReply:NO query: ^{
-			    NSArray* attachments = vals[@"attachment"];
-			    NSString* body = vals[@"body"];
-			    NSString* address = vals[@"address"];
-			    NSString* sub = vals[@"subject"];
+		if ([controller connectToDaemon]) {
+			NSArray* attachments = vals[@"attachment"];
+			NSString* body = vals[@"body"];
+			NSString* address = vals[@"address"];
+			NSString* sub = vals[@"subject"];
+			
+			NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
+			NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
 
-			    NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
-			    NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
+			/*
+			IMChatRegistry* registry = [%c(IMChatRegistry) sharedInstance];
+			IMChat* chat = [registry existingChatWithChatIdentifier:(__NSCFString *)address];
 
-				/*
-			    IMChatRegistry* registry = [%c(IMChatRegistry) sharedInstance];
-			    IMChat* chat = [registry existingChatWithChatIdentifier:(__NSCFString *)address];
-
-			    if (chat == nil) {
-				    IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
-				    IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
-				    
-				    __NSCFString *handleId = (__NSCFString *)address;
-				    IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
-				    
-				    chat = [registry chatForIMHandle:handle];
-			    }
-
-			    NSMutableArray* attachmentFileGuids = [NSMutableArray array];
-				NSMutableArray* attachmentFiles = [NSMutableArray array];
-
-			    if ([attachments count] > 0)  {
-				    CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
-					IMFileTransferCenter* transferCenter = [%c(IMFileTransferCenter) sharedInstance];
-
-				    for (NSString* obj in attachments) {
-					    NSURL* fileURL = [NSURL fileURLWithPath:obj];
-					    CKMediaObject* object = [si mediaObjectWithFileURL:fileURL filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
-						IMFileTransfer* transfer = [transferCenter transferForGUID:[object transferGUID] includeRemoved:YES];
-
-						[transferCenter _addTransfer:transfer];
-
-					    [attachmentFileGuids addObject:[object transferGUID]];	
-						[attachmentFiles addObject:transfer];
-				    }
-			    }
-
-				BOOL filesReady = NO;
+			if (chat == nil) {
+				IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+				IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
 				
-				while (!filesReady && [attachmentFiles count] > 0) {
-					filesReady = YES;
-					for (IMFileTransfer* obj in attachmentFiles) {
-						if (!obj.isFinished) filesReady = NO;
-					}
-					[NSThread sleepForTimeInterval:0.2f];
+				__NSCFString *handleId = (__NSCFString *)address;
+				IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+				
+				chat = [registry chatForIMHandle:handle];
+			}
+
+			NSMutableArray* attachmentFileGuids = [NSMutableArray array];
+			NSMutableArray* attachmentFiles = [NSMutableArray array];
+
+			if ([attachments count] > 0)  {
+				CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+				IMFileTransferCenter* transferCenter = [%c(IMFileTransferCenter) sharedInstance];
+
+				for (NSString* obj in attachments) {
+					NSURL* fileURL = [NSURL fileURLWithPath:obj];
+					CKMediaObject* object = [si mediaObjectWithFileURL:fileURL filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
+					IMFileTransfer* transfer = [transferCenter transferForGUID:[object transferGUID] includeRemoved:YES];
+
+					[transferCenter _addTransfer:transfer];
+
+					[attachmentFileGuids addObject:[object transferGUID]];	
+					[attachmentFiles addObject:transfer];
+				}
+			}
+
+			BOOL filesReady = NO;
+			
+			while (!filesReady && [attachmentFiles count] > 0) {
+				filesReady = YES;
+				for (IMFileTransfer* obj in attachmentFiles) {
+					if (!obj.isFinished) filesReady = NO;
+				}
+				[NSThread sleepForTimeInterval:0.2f];
+			}
+
+			IMMessage *message;
+
+			if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0) {
+				if ([attachmentFileGuids count] > 0)
+					message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581 threadIdentifier:nil];
+				else
+					message = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
+			} else {
+				if ([attachmentFileGuids count] > 0)
+					message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581];
+				else
+					message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+			}
+
+			[chat sendMessage:message];
+			*/
+
+			CKConversationList* list = [%c(CKConversationList) sharedConversationList];
+			CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+
+			if (conversation != nil) {
+				CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:text subject:([subject length] > 0 ? subject : nil)];
+				CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
+
+				for (NSString* obj in attachments) {
+
+					NSURL* file_url = [NSURL fileURLWithPath:obj];
+					CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
+
+					composition = [composition compositionByAppendingMediaObject:object];
 				}
 
-			    IMMessage *message;
+				id message = [conversation messageWithComposition:composition];
+				[conversation sendMessage:message newComposition:YES];
 
-			    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0) {
-				    if ([attachmentFileGuids count] > 0)
-					    message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581 threadIdentifier:nil];
-				    else
-					    message = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
-			    } else {
-				    if ([attachmentFileGuids count] > 0)
-					    message = [%c(IMMessage) instantMessageWithText:text messageSubject:(subject.length > 0 ? sub : nil) fileTransferGUIDs:[attachmentFileGuids copy] flags:1048581];
-				    else
-					    message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
-			    }
+			} else {
 
-			    [chat sendMessage:message];
-				*/
+				IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
+				IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
+				
+				__NSCFString *handleId = (__NSCFString *)address;
+				IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
+				
+				IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
+				IMChat *chat = [registry chatForIMHandle:handle];
 
-			    CKConversationList* list = [%c(CKConversationList) sharedConversationList];
-			    CKConversation* conversation = [list conversationForExistingChatWithGroupID:address];
+				IMMessage* immessage;
+				if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0)
+					immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
+				else
+					immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
 
-			    if (conversation != nil) {
-				    CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:text subject:([subject length] > 0 ? subject : nil)];
-
-				    CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
-
-				    for (NSString* obj in attachments) {
-
-					    NSURL* file_url = [NSURL fileURLWithPath:obj];
-					    CKMediaObject* object = [si mediaObjectWithFileURL:file_url filename:nil transcoderUserInfo:@{} attributionInfo:@{} hideAttachment:NO];
-
-					    composition = [composition compositionByAppendingMediaObject:object];
-				    }
-
-				    IMMessage* message = [conversation messageWithComposition:composition];
-				    [conversation sendMessage:message newComposition:YES];
-
-			    } else {
-
-				    IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
-				    IMAccount *myAccount = [sharedAccountController mostLoggedInAccount];
-				    
-				    __NSCFString *handleId = (__NSCFString *)address;
-				    IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
-				    
-				    IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
-				    IMChat *chat = [registry chatForIMHandle:handle];
-
-				    IMMessage* immessage;
-				    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0)
-						immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
-				    else
-						immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
-
-				    [chat sendMessage:immessage];
-			    }
-
-			}];
+				[chat sendMessage:immessage];
+			}
 		} else {
 			NSLog(@"LibSMServer_app: Failed to connect to daemon");
 		}
@@ -158,10 +153,8 @@
 	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
 	if ([controller connectToDaemon]) {
-		[controller sendQueryWithReply:NO query: ^{
-			IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:(__NSCFString *)chat];
-			[imchat markAllMessagesAsRead];
-		}];
+		IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:(__NSCFString *)chat];
+		[imchat markAllMessagesAsRead];
 	} else {
 		NSLog(@"LibSMServer_app: Couldn't connect to daemon to set %@ as read", chat);
 	}	
@@ -176,7 +169,7 @@
 
     __block IMMessage *item = nil;
     [[%c(IMChatHistoryController) sharedInstance] loadMessageWithGUID:guid completionBlock: ^(id msg){
-	item = msg;
+		item = msg;
     }];
 
     while (item == nil) {};
@@ -190,14 +183,13 @@
 }*/
 
 - (NSArray *)getPinnedChats {
-    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0) {
-		IMPinnedConversationsController* pinnedController = [%c(IMPinnedConversationsController) sharedInstance];
-		NSOrderedSet* set = [pinnedController pinnedConversationIdentifierSet];
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
+    	return [NSArray array];
 
-		return [set array];
-    } 
-    
-    return [NSArray array];
+	IMPinnedConversationsController* pinnedController = [%c(IMPinnedConversationsController) sharedInstance];
+	NSOrderedSet* set = [pinnedController pinnedConversationIdentifierSet];
+
+	return [set array];
 }
 
 - (void)launchSMS {
