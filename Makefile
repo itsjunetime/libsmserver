@@ -20,3 +20,6 @@ SYSROOT = $(THEOS)/sdks/iPhoneOS13.1.sdk
 
 before-stage::
 	find . -name ".DS_Store" -delete
+
+after-install::
+	install.exec "killall -9 imagent"

@@ -1,1 +1,1 @@
-{ Filter = { Bundles = ( "com.apple.MobileSMS", "com.apple.springboard", "com.ianwelker.smserver" ); }; }
+{ Filter = { Bundles = ( "com.apple.MobileSMS", "com.apple.springboard", "com.ianwelker.smserver" ); Executables = ( "imagent" ); }; }

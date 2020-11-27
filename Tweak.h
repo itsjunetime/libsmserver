@@ -1,5 +1,4 @@
 @interface NSObject (Undocumented)
-+ (id)description;
 @end
 
 @interface __NSCFString
@@ -18,12 +17,9 @@
 @interface CKConversation : NSObject
 - (id)messageWithComposition:(id)arg1;
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
-- (void)setLocalUserIsTyping:(_Bool)arg1;
-- (id)messagesFromComposition:(id)arg1;
 @end
 
 @interface CKMediaObject : NSObject
-- (NSString *)transferGUID;
 @end
 
 @interface CKMediaObjectManager : NSObject
@@ -34,7 +30,6 @@
 @interface IMDaemonController
 + (id)sharedController;
 - (BOOL)connectToDaemon;
-- (void)sendQueryWithReply:(BOOL)arg1 query:(id)arg2;
 @end
 
 @interface IMPinnedConversationsController
@@ -48,9 +43,18 @@
 
 @interface NSConcreteNotification
 - (id)object;
+- (id)userInfo;
 @end
 
-@interface IMChat : NSObject {
+@interface NSDistributedNotificationCenter
++ (id)defaultCenter;
+@end
+
+@interface IMItemsController : NSObject
+- (id)_itemForGUID:(id)arg1;
+@end
+
+@interface IMChat : IMItemsController {
 	NSString *_identifier;
 }
 - (void)sendMessage:(id)arg1;
@@ -58,17 +62,15 @@
 - (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3;
 @end
 
+@interface IMItem
+- (NSString *)guid;
+@end
+
 @interface IMFileTransferCenter
-- (id)transferForGUID:(id)arg1 includeRemoved:(BOOL)arg2;
-- (NSArray *)activeTransfers;
-- (NSArray *)activeTransferGUIDs;
-- (void)_addTransfer:(id)arg1;
 @end
 
 @interface IMFileTransfer : NSObject
-- (long long)transferState;
 - (NSString *)guid;
-- (BOOL)isFinished;
 @end
 
 @interface IMChatRegistry
@@ -96,9 +98,8 @@
 	IMHandle *_subject;
 }
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
-+ (id)instantMessageWithText:(id)arg1 messageSubject:(id)arg2 fileTransferGUIDs:(id)arg3 flags:(unsigned long long)arg4;
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2 threadIdentifier:(id)arg3;
-+ (id)instantMessageWithText:(id)arg1 messageSubject:(id)arg2 fileTransferGUIDs:(id)arg3 flags:(unsigned long long)arg4 threadIdentifier:(id)arg5;
+- (NSString *)guid;
 @end
 
 @interface IMAccount : NSObject {
@@ -108,7 +109,8 @@
 
 @interface IMAccountController : NSObject
 + (id)sharedInstance;
-- (id)mostLoggedInAccount;
+- (id)activeIMessageAccount;
+- (IMAccount *)activeSMSAccount;
 @end
 
 @interface SBApplicationController
