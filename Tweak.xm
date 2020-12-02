@@ -47,8 +47,10 @@
 }
 
 - (void)sendText:(NSDictionary *)vals {
+	__block NSString* ret_guid;
+
 	/// You have to run this on main thread to do the `mediaObjectWithFileURL` bit
-	dispatch_async(dispatch_get_main_queue(), ^{
+	dispatch_sync(dispatch_get_main_queue(), ^{
 		IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
 		if ([controller connectToDaemon]) {
@@ -56,7 +58,7 @@
 			NSString* body = vals[@"body"];
 			NSString* address = vals[@"address"];
 			NSString* sub = vals[@"subject"];
-			
+
 			NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
 			NSAttributedString* subject = [[NSAttributedString alloc] initWithString:sub];
 
@@ -76,7 +78,10 @@
 				}
 
 				id message = [conversation messageWithComposition:composition];
+
 				[conversation sendMessage:message newComposition:YES];
+
+				ret_guid = [(IMMessage *)message guid];
 
 			} else {
 				IMAccountController *sharedAccountController = [%c(IMAccountController) sharedInstance];
@@ -91,19 +96,23 @@
 				IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
 				IMChat *chat = [registry chatForIMHandle:handle];
 
-				IMMessage* immessage;
+				IMMessage* message;
 				if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0)
-					immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
+					message = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
 				else
-					immessage = [%c(IMMessage) instantMessageWithText:text flags:1048581];
+					message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
 
-				[chat sendMessage:immessage];
+				[chat sendMessage:message];
+
+				ret_guid = [(IMMessage *)message guid];
 			}
 		} else {
 			NSLog(@"LibSMServer_app: Failed to connect to daemon");
 		}
 	});
 
+	MRYIPCCenter *center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+	[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:ret_guid];
 }
 
 - (void)setAllAsRead:(NSString *)chat {
