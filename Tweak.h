@@ -60,10 +60,23 @@
 - (void)sendMessage:(id)arg1;
 - (void)markAllMessagesAsRead;
 - (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3;
+- (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withAssociatedMessageInfo:(id)arg3;
+- (void)remove;
+- (NSArray *)chatItems;
+- (id)messageForGUID:(id)arg1;
+- (id)messageItemForGUID:(id)arg1;
+- (void)loadMessagesUpToGUID:(id)arg1 date:(id)arg2 limit:(unsigned long long)arg3 loadImmediately:(BOOL)arg4;
 @end
 
 @interface IMItem
 - (NSString *)guid;
+@end
+
+@interface IMTranscriptChatItem : NSObject
+- (NSString *)guid;
+@end
+
+@interface IMTextMessagePartChatItem : IMTranscriptChatItem
 @end
 
 @interface IMFileTransferCenter
@@ -77,6 +90,7 @@
 + (id)sharedInstance;
 - (id)chatForIMHandle:(id)arg1;
 - (id)existingChatWithChatIdentifier:(id)arg1;
+- (id)_chatsWithMessageGUID:(id)arg1;
 @end
 
 @interface IMChatHistoryController
@@ -90,7 +104,10 @@
 - (id)initWithAccount:(id)arg1 ID:(id)arg2 alreadyCanonical:(_Bool)arg3;
 @end
 
-@interface IMMessageItem
+@interface IMMessageItem : NSObject
+- (id)_initWithItem:(id)arg1 text:(id)arg2 index:(long long)arg3 messagePartRange:(NSRange)arg4 subject:(id)arg5;
+- (NSString *)subject;
+- (NSAttributedString *)body;
 - (id)sender;
 @end
 
