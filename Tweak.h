@@ -66,6 +66,7 @@
 - (id)messageForGUID:(id)arg1;
 - (id)messageItemForGUID:(id)arg1;
 - (void)loadMessagesUpToGUID:(id)arg1 date:(id)arg2 limit:(unsigned long long)arg3 loadImmediately:(BOOL)arg4;
+- (void)deleteChatItems:(id)arg1;
 @end
 
 @interface IMItem

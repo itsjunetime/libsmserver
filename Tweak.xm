@@ -26,7 +26,7 @@
 		[_center addTarget:self action:@selector(getPinnedChats)];
 		[_center addTarget:self action:@selector(checkIfRunning:)];
 		[_center addTarget:self action:@selector(sendTapback:)];
-		//[_center addTarget:self action:@selector(delete:)];
+		[_center addTarget:self action:@selector(delete:)];
 		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(receivedText:) name:@"__kIMChatMessageReceivedNotification" object:nil];
 		//[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sentText:) name:@"__kIMChatRegistryMessageSentNotification" object:nil];
 	}
@@ -176,19 +176,39 @@
 	return app.processState != nil ? @"YES" : @"NO";
 }
 
-/*- (void)delete:(NSDictionary *)vals {
-	NSString *identifier = [vals objectForKey:@"id"];
-	BOOL is_chat = [[vals objectForKey:@"is_chat"] isEqualToString:@"true"];
-	IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:(__NSCFString *)identifier];
+- (void)delete:(NSDictionary *)vals {
+	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
-	if (imchat == nil) return;
+	if ([controller connectToDaemon]) {
+		NSString *chat_id = [vals objectForKey:@"chat"];
+		NSString *text = [vals objectForKey:@"text"];
+		IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:(__NSCFString *)chat_id];
 
-	if (is_chat) {
-		[imchat remove];
+		if (imchat == nil) return;
+
+		if (text == nil || [text length] == 0) {
+			[imchat remove];
+		} else {
+			IMMessageItem* item = nil;
+
+			for (int i = 0; i < 2 && item == nil; i++) {
+				[imchat loadMessagesUpToGUID:text date:nil limit:nil loadImmediately:YES];
+				
+				for (int l = 0; l < 100; l++)
+					item = [imchat messageItemForGUID:text];
+			}
+
+			if (item == nil)
+				return; /// sometimes necessary :(
+
+			IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc] _initWithItem:item text:[item body] index:0 messagePartRange:NSMakeRange(0, [[item body] length]) subject:[item subject]];
+
+			[imchat deleteChatItems:@[pci]];
+		}
 	} else {
-		NSLog(@"LibSMServer_app: No :)");
+		NSLog(@"LibSMServer_app: Couldn't connect to daemon to delete");
 	}
-}*/
+}
 
 @end
 
@@ -219,7 +239,7 @@
 /// This allows any process to communicate with imagent
 - (unsigned)_capabilities {
 	NSString *process = [[NSProcessInfo processInfo] processName];
-	if ([process isEqualToString:@"SpringBoard"] || [process isEqualToString:@"MobileSMS"])
+	if ([process isEqualToString:@"SpringBoard"] || [process isEqualToString:@"MobileSMS"] || [process isEqualToString:@"SMServer"])
 		return 17159;
 	else
 		return %orig;
