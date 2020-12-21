@@ -6,7 +6,7 @@ This is the companion tweak to my app, [SMServer](https://github.com/iandwelker/
  - libmryipc - A package that is available on a default repo. Make sure you install this, it is required for this tweak to work.
 
 ## Disclaimer
-$\qquad$ Reminder that software this comes with **no warranty** and is provided **as is**. Although I do my best to prevent it from harming your device (feel free to contact me if you would like details on how I do this), I cannot ensure that it will do no harm, and I cannot be held liable if such damage occurs.
+&nbsp;&nbsp;&nbsp;&nbsp; Reminder that software this comes with **no warranty** and is provided **as is**. Although I do my best to prevent it from harming your device (feel free to contact me if you would like details on how I do this), I cannot ensure that it will do no harm, and I cannot be held liable if such damage occurs.
 
 ## To install:
 1. Install libmryipc from your package manager (e.g. Cydia, Zebra, Sileo)
