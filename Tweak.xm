@@ -1,3 +1,5 @@
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <MRYIPCCenter.h>
 #import "substrate.h"
 #import "Tweak.h"
@@ -217,6 +219,7 @@
 }
 
 - (NSNumber *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs 
+	/// Just checks if a certain app with the bundle id `bundle_id` is running at all, background or foreground.
 	SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundle_id];
 	return app.processState != nil ? @1 : @0;
 }
@@ -234,6 +237,7 @@
 		if (imchat == nil) return @0;
 
 		if (text == nil || [text length] == 0) {
+			/// deletes the conversation
 			[imchat remove];
 
 			return @1;
@@ -271,34 +275,37 @@
 
 - (bool)isCancelTypingMessage {
 	bool orig = %orig;
-	NSLog(@"LibSMServer_app: got orig: %d", orig);
+
+	/// if `orig` is true here, someone stopped typing.
 	if (orig) {
-		NSLog(@"LibSMServer_app: in if");
+
+		/// we have to grab this NSString* outside the dispatch_async block 'cause `self` gets deallocated pretty quickly.
+		/// if we try to call anything on `self`, it crashes SpringBoard
+		__block NSString* sender = [self sender];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-			NSLog(@"LibSMServer_app: in dipsatch");
 
-			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			NSLog(@"LibSMServer_app: created sbCenter: %@", sbCenter);
-
+			MRYIPCCenter* sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] boolValue];
-			NSLog(@"LibSMServer_app: got isRunning: %d", isRunning);
 
+			/// if SMServer is not running, trying to grab the MRYIPCCenter in it and call anything on it crashes SpringBoard, so we need to check.
 			if (isRunning) {
-				NSLog(@"LibSMServer_app: in ifrunning");
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				NSLog(@"LibSMServer_app: center: %@", center);
-				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": [self sender], @"typing": @0}];
-				NSLog(@"LibSMServer_app: called void");
+				if (sender != nil)
+					[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @0}];
 			}
 		});
 	}
-	NSLog(@"LibSMServer_app: returining orig");
+
 	return orig;
 }
 
 - (bool)isIncomingTypingMessage {
 	bool orig = %orig;
+
+	/// if `orig` is true here, somebody started typing.
 	if (orig) {
+		
+		__block NSString* sender = [self sender];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
@@ -306,7 +313,7 @@
 
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": [self sender], @"typing": @1}];
+				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @1}];
 			}
 		});
 	}
