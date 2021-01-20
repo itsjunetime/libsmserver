@@ -212,10 +212,29 @@
 	if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
 		return [NSArray array];
 
-	IMPinnedConversationsController* pinnedController = [%c(IMPinnedConversationsController) sharedInstance];
-	NSOrderedSet* set = [pinnedController pinnedConversationIdentifierSet];
+	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
-	return [set array];
+	if ([controller connectToDaemon]) {
+		IMPinnedConversationsController* pinnedController = [%c(IMPinnedConversationsController) sharedInstance];
+		NSArray* pins = [[pinnedController pinnedConversationIdentifierSet] array];
+
+		CKConversationList* list = [%c(CKConversationList) sharedConversationList];
+		NSMutableArray* convos = [NSMutableArray arrayWithCapacity:[pins count]];
+
+		/// ugh. So `pins` contains an array of pinning identifiers, not chat identifiers. So we have to iterate through
+		/// and get the chat identifiers that correspond with the pinning identifiers, since SMServer parses them by chat identifier.
+		for (id obj in pins) {
+			CKConversation* convo = (CKConversation *)[list conversationForExistingChatWithPinningIdentifier:obj];
+			if (convo == nil) continue;
+			NSString* identifier = [[convo chat] chatIdentifier];
+			[convos addObject:identifier];
+		}
+
+		return convos;
+	}
+
+	NSLog(@"LibSMServer_app: Could not connect to daemon to get pinned chats");
+	return [NSArray array];
 }
 
 - (NSNumber *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs 

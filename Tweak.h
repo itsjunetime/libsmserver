@@ -7,16 +7,12 @@
 @interface CKConversationList
 + (id)sharedConversationList;
 - (id)conversationForExistingChatWithGroupID:(id)arg1;
+- (id)conversationForExistingChatWithPinningIdentifier:(id)arg1;
 @end
 
 @interface CKComposition : NSObject
 - (id)initWithText:(id)arg1 subject:(id)arg2;
 - (id)compositionByAppendingMediaObject:(id)arg1;
-@end
-
-@interface CKConversation : NSObject
-- (id)messageWithComposition:(id)arg1;
-- (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
 
 @interface CKMediaObject : NSObject
@@ -36,41 +32,31 @@
 - (NSOrderedSet *)pinnedConversationIdentifierSet;
 @end
 
-@interface UIApplication (Undocumented)
-+ (id)sharedApplication;
-- (_Bool)launchApplicationWithIdentifier:(id)arg1 suspended:(_Bool)arg2;
-@end
-
 @interface NSConcreteNotification
 - (id)object;
 - (id)userInfo;
 @end
 
-@interface NSDistributedNotificationCenter
-+ (id)defaultCenter;
+@interface IMItemsController
 @end
 
-@interface IMItemsController : NSObject
-- (id)_itemForGUID:(id)arg1;
-@end
-
-@interface IMChat : IMItemsController {
-	NSString *_identifier;
-}
+@interface IMChat : IMItemsController
 - (void)sendMessage:(id)arg1;
 - (void)markAllMessagesAsRead;
 - (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withMessageSummaryInfo:(id)arg3;
 - (void)sendMessageAcknowledgment:(long long)arg1 forChatItem:(id)arg2 withAssociatedMessageInfo:(id)arg3;
 - (void)remove;
 - (NSArray *)chatItems;
-- (id)messageForGUID:(id)arg1;
 - (id)messageItemForGUID:(id)arg1;
 - (void)loadMessagesUpToGUID:(id)arg1 date:(id)arg2 limit:(unsigned long long)arg3 loadImmediately:(BOOL)arg4;
 - (void)deleteChatItems:(id)arg1;
+- (id)chatIdentifier;
 @end
 
-@interface IMItem
-- (NSString *)guid;
+@interface CKConversation : NSObject
+@property (nonatomic, retain) IMChat *chat;
+- (id)messageWithComposition:(id)arg1;
+- (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
 
 @interface IMTranscriptChatItem : NSObject
@@ -91,12 +77,6 @@
 + (id)sharedInstance;
 - (id)chatForIMHandle:(id)arg1;
 - (id)existingChatWithChatIdentifier:(id)arg1;
-- (id)_chatsWithMessageGUID:(id)arg1;
-@end
-
-@interface IMChatHistoryController
-+ (id)sharedInstance;
-- (void)loadMessageWithGUID:(id)arg1 completionBlock:(void(^)(id))arg2;
 @end
 
 @interface IMHandle : NSObject {
