@@ -30,13 +30,12 @@
 		[_center addTarget:self action:@selector(sendTapback:)];
 		[_center addTarget:self action:@selector(delete:)];
 		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(receivedText:) name:@"__kIMChatMessageReceivedNotification" object:nil];
-		//[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sentText:) name:@"__kIMChatRegistryMessageSentNotification" object:nil];
 	}
 	return self;
 }
 
 - (void)receivedText:(NSConcreteNotification *)notif {
-	_Bool isRunning = [[self checkIfRunning:@"com.ianwelker.smserver"] boolValue];
+	BOOL isRunning = [[self checkIfRunning:@"SMServer"] boolValue];
 
 	if (isRunning) {
 		IMMessage *msg = [[notif userInfo] objectForKey:@"__kIMChatValueKey"];
@@ -51,9 +50,10 @@
 	__block NSNumber* ret_bool = 0;
 
 	/// You have to run this on main thread to do the `mediaObjectWithFileURL` bit
-	dispatch_sync(dispatch_get_main_queue(), ^{
-		IMDaemonController* controller = [%c(IMDaemonController) sharedController];
+	//dispatch_sync(dispatch_get_main_queue(), ^{
+	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
+	void (^processBlock)() = ^{
 		if ([controller connectToDaemon]) {
 			NSArray* attachments = vals[@"attachment"];
 			NSString* body = vals[@"body"];
@@ -106,7 +106,7 @@
 				__NSCFString *handleId = (__NSCFString *)address;
 				IMHandle *handle = [[%c(IMHandle) alloc] initWithAccount:myAccount ID:handleId alreadyCanonical:YES];
 
-				/// Their handle is then registered with the `IMChatRegistry` automatically, and we grab the 
+				/// Their handle is then registered with the `IMChatRegistry` automatically, and we grab the
 				/// `IMChat` that was created for it, since we can send messages to that.
 				IMChatRegistry *registry = [%c(IMChatRegistry) sharedInstance];
 				IMChat *chat = [registry chatForIMHandle:handle];
@@ -133,7 +133,15 @@
 		} else {
 			NSLog(@"LibSMServer_app: Failed to connect to daemon");
 		}
-	});
+	};
+
+	if ([NSThread isMainThread])
+		processBlock();
+	else
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			processBlock();
+		});
+	
 
 	return ret_bool;
 }
@@ -164,33 +172,40 @@
 		/// Get the chat that the tapback will be sent in
 		IMChat *chat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:address];
 
-		/// I'm initializing the item to `nil` so that it is still nil
+		/// I'm initializing the message to `nil` so that it is still nil
 		/// if it is not able to get the item in the following block
-		IMMessageItem *item = nil;
+		IMMessage *msg = nil;
 
 		// Sometimes it takes a few tries to actually load the messages correctly
-		for (int t = 0; t < 2 && item == nil; t++) { 
+		for (int t = 0; t < 2 && msg == nil; t++) {
 			/// Have to call this to populate the `[chat chatItems]` array
-			/// If you don't call this, then `[chat messageItemForGUID:]` returns nil no matter what
+			/// If you don't call this, then `[chat messageForGUID:]` returns nil no matter what
 			[chat loadMessagesUpToGUID:guid date:nil limit:nil loadImmediately:YES];
 
-			for (int i = 0; item == nil && i < 100; i++) /// Sometimes it takes a few tries here as well
-				/// Get the item that has the guid we want
-				item = [chat messageItemForGUID:guid];
+			for (int i = 0; msg == nil && i < 100; i++) /// Sometimes it takes a few tries here as well
+				/// Get the message that has the guid we want
+				msg = [chat messageForGUID:guid];
 		}
 
-		if (item == nil)
+		if (msg == nil || [msg _imMessageItem] == nil)
 			return @0; /// Sometimes necessary :(
+
+		IMMessageItem *item = [msg _imMessageItem];
 
 		/// The `sendMessageAcknowledgment` method takes an IMTextMessagePartChatItem as the parameter,
 		/// so we have to initilize one with these exact values.
-		IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc] _initWithItem:item text:[item body] index:0 messagePartRange:NSMakeRange(0, [[item body] length]) subject:[item subject]];
+		IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc]
+															_initWithItem:item
+															text:[item body]
+															index:0
+															messagePartRange:NSMakeRange(0, [[item body] length])
+															subject:[item subject]];
 
 		/// This `info` dictionary isn't perfectly accurate (sometimes `amc` has to be something different,
 		/// and sometimes there's an `amb` value), but so far I haven't run into any issues.
 		NSDictionary *info = @{@"amc": @1, @"ams": [[item body] string]};
 
-		if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0) 
+		if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
 			/// I honestly have no idea if this will work. No way to test
 			[chat sendMessageAcknowledgment:tapback forChatItem:pci withMessageSummaryInfo:info];
 		else
@@ -237,10 +252,22 @@
 	return [NSArray array];
 }
 
-- (NSNumber *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs 
+- (NSNumber *)checkIfRunning:(NSString *)bundle_id { /// Would return a _Bool but you can only send `id`s through MRYIPC funcs
 	/// Just checks if a certain app with the bundle id `bundle_id` is running at all, background or foreground.
-	SBApplication *app = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:bundle_id];
-	return app.processState != nil ? @1 : @0;
+	NSTask* task = [[NSTask alloc] init];
+	[task setLaunchPath:@"/bin/sh"];
+	[task setArguments:@[@"-c", [NSString stringWithFormat:@"ps aux | grep %@ | grep -v grep", bundle_id]]];
+
+	NSPipe* pipe = [NSPipe pipe];
+	[task setStandardOutput:pipe];
+	NSFileHandle* file = [pipe fileHandleForReading];
+
+	[task launch];
+
+	NSData* data = [file readDataToEndOfFile];
+	NSString* out = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+
+	return out.length > 0 ? @1 : @0;
 }
 
 - (NSNumber *)delete:(NSDictionary *)vals {
@@ -266,7 +293,7 @@
 
 			for (int i = 0; i < 2 && item == nil; i++) {
 				[imchat loadMessagesUpToGUID:text date:nil limit:nil loadImmediately:YES];
-				
+
 				for (int l = 0; l < 100; l++)
 					item = [imchat messageItemForGUID:text];
 			}
@@ -309,8 +336,7 @@
 			/// if SMServer is not running, trying to grab the MRYIPCCenter in it and call anything on it crashes SpringBoard, so we need to check.
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				if (sender != nil)
-					[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @0}];
+				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @0}];
 			}
 		});
 	}
@@ -323,7 +349,7 @@
 
 	/// if `orig` is true here, somebody started typing.
 	if (orig) {
-		
+
 		__block NSString* sender = [self sender];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
@@ -340,6 +366,32 @@
 }
 
 %end
+
+/*%hook NSNotificationCenter
+
+- (void)postNotificationName:(NSString *)name object:(id)sender userInfo:(NSDictionary *)userInfo {
+	NSLog(@"LibSMServer_app: name is %@", name);
+	if ([name isEqualToString:@"__kIMChatRegistryMessageSentNotification"]) {
+
+		NSLog(@"LibSMServer_app: name is eq");
+
+		__block NSString* guid = [(IMMessage *)userInfo[@"__kIMChatRegistryMessageSentMessageKey"] guid];
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+
+			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
+			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] boolValue];
+
+			if (isRunning) {
+				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+				[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+			}
+		});
+	}
+
+	%orig;
+}
+
+%end*/
 
 %hook IMDaemonController
 
@@ -358,5 +410,5 @@
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	if ([bundleID isEqualToString:@"com.apple.springboard"])
-		SMServerIPC* smsCenter = [SMServerIPC sharedInstance];
+		[SMServerIPC sharedInstance];
 }

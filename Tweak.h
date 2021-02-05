@@ -48,6 +48,7 @@
 - (void)remove;
 - (NSArray *)chatItems;
 - (id)messageItemForGUID:(id)arg1;
+- (id)messageForGUID:(id)arg1;
 - (void)loadMessagesUpToGUID:(id)arg1 date:(id)arg2 limit:(unsigned long long)arg3 loadImmediately:(BOOL)arg4;
 - (void)deleteChatItems:(id)arg1;
 - (id)chatIdentifier;
@@ -98,6 +99,7 @@
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2;
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2 threadIdentifier:(id)arg3;
 - (NSString *)guid;
+- (IMMessageItem *)_imMessageItem;
 @end
 
 @interface IMAccount : NSObject {
@@ -126,4 +128,11 @@
 @interface NSBundle (Undocumented)
 + (id)mainBundle;
 @property (readonly, copy) NSString *bundleIdentifier;
+@end
+
+@interface NSTask : NSObject
+- (void)setLaunchPath:(NSString *)str;
+- (void)setArguments:(NSArray *)args;
+- (void)launch;
+- (void)setStandardOutput:(id)out;
 @end
