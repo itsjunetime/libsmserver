@@ -70,7 +70,7 @@
 
 			/// If conversation == nil, we've never talked to them before, and have to make a new conversation.
 			if (conversation != nil) {
-				CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:text subject:([subject length] > 0 ? subject : nil)];
+				CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:nil subject:nil];
 
 				/// The `CKMediaObjectManager` is what can initialize `CKMediaObject`s to add to the composition.
 				CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
@@ -83,6 +83,11 @@
 
 					composition = [composition compositionByAppendingMediaObject:object];
 				}
+
+				composition = [composition compositionByAppendingText:text];
+
+				if (subject != nil  && [subject length] > 0)
+					[composition setSubject:subject];
 
 				/// It takes an `IMMessage` as the parameter.
 				IMMessage* message = [conversation messageWithComposition:composition];

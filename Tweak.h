@@ -13,6 +13,8 @@
 @interface CKComposition : NSObject
 - (id)initWithText:(id)arg1 subject:(id)arg2;
 - (id)compositionByAppendingMediaObject:(id)arg1;
+- (id)compositionByAppendingText:(id)arg1;
+- (void)setSubject:(id)arg1;
 @end
 
 @interface CKMediaObject : NSObject
