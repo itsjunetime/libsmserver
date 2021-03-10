@@ -70,7 +70,7 @@
 
 			/// If conversation == nil, we've never talked to them before, and have to make a new conversation.
 			if (conversation != nil) {
-				CKComposition* composition  = [[%c(CKComposition) alloc] initWithText:nil subject:nil];
+				CKComposition* composition = [%c(CKComposition) composition];
 
 				/// The `CKMediaObjectManager` is what can initialize `CKMediaObject`s to add to the composition.
 				CKMediaObjectManager* si = [%c(CKMediaObjectManager) sharedInstance];
@@ -84,7 +84,9 @@
 					composition = [composition compositionByAppendingMediaObject:object];
 				}
 
-				composition = [composition compositionByAppendingText:text];
+				// We have to set text after setting images so that the text is set with the correct NSAttributedString
+				if ([text length] > 0)
+					composition = [composition compositionByAppendingText:text];
 
 				if (subject != nil  && [subject length] > 0)
 					[composition setSubject:subject];
@@ -177,38 +179,11 @@
 		/// Get the chat that the tapback will be sent in
 		IMChat *chat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:address];
 
-		/// I'm initializing the message to `nil` so that it is still nil
-		/// if it is not able to get the item in the following block
-		IMMessage *msg = nil;
-
-		// Sometimes it takes a few tries to actually load the messages correctly
-		for (int t = 0; t < 2 && msg == nil; t++) {
-			/// Have to call this to populate the `[chat chatItems]` array
-			/// If you don't call this, then `[chat messageForGUID:]` returns nil no matter what
-			[chat loadMessagesUpToGUID:guid date:nil limit:nil loadImmediately:YES];
-
-			for (int i = 0; msg == nil && i < 100; i++) /// Sometimes it takes a few tries here as well
-				/// Get the message that has the guid we want
-				msg = [chat messageForGUID:guid];
-		}
-
-		if (msg == nil || [msg _imMessageItem] == nil)
-			return @0; /// Sometimes necessary :(
-
-		IMMessageItem *item = [msg _imMessageItem];
-
-		/// The `sendMessageAcknowledgment` method takes an IMTextMessagePartChatItem as the parameter,
-		/// so we have to initilize one with these exact values.
-		IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc]
-															_initWithItem:item
-															text:[item body]
-															index:0
-															messagePartRange:NSMakeRange(0, [[item body] length])
-															subject:[item subject]];
+		IMTextMessagePartChatItem* pci = [self getIMTMPCIForStructuredGUID:guid inChat:address];
 
 		/// This `info` dictionary isn't perfectly accurate (sometimes `amc` has to be something different,
 		/// and sometimes there's an `amb` value), but so far I haven't run into any issues.
-		NSDictionary *info = @{@"amc": @1, @"ams": [[item body] string]};
+		NSDictionary *info = @{@"amc": @1, @"ams": [[(IMMessageItem *)[pci _item] body] string]};
 
 		if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
 			/// I honestly have no idea if this will work. No way to test
@@ -293,20 +268,7 @@
 
 			return @1;
 		} else {
-			/// see the `sendTapback` function for specifics about the next few lines; they're used there too.
-			IMMessageItem* item = nil;
-
-			for (int i = 0; i < 2 && item == nil; i++) {
-				[imchat loadMessagesUpToGUID:text date:nil limit:nil loadImmediately:YES];
-
-				for (int l = 0; l < 100; l++)
-					item = [imchat messageItemForGUID:text];
-			}
-
-			if (item == nil)
-				return @0; /// sometimes necessary :(
-
-			IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc] _initWithItem:item text:[item body] index:0 messagePartRange:NSMakeRange(0, [[item body] length]) subject:[item subject]];
+			IMTextMessagePartChatItem* pci = [self getIMTMPCIForStructuredGUID:text inChat:chat_id];
 
 			/// It takes an array so that you can delete multiple at a time
 			[imchat deleteChatItems:@[pci]];
@@ -318,6 +280,77 @@
 	}
 
 	return @0;
+}
+
+- (IMTextMessagePartChatItem *)getIMTMPCIForStructuredGUID:(NSString *)guid inChat:(NSString *)chat {
+	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
+
+	if ([controller connectToDaemon]) {
+		// full_guid is just the text's guid, minus the part identifier (e.g. `p:o/`, `bp:`, etc)
+		NSString *full_guid = [guid substringFromIndex:[guid length] - 36];
+		IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:chat];
+
+		if (imchat == nil)
+			return nil;
+
+		// index specifies which part of the message it will be sent to, like if there are 4 attachments and text
+		// this specifies which attachment (or the text) to send it to
+		long long index = 0;
+
+		// set the index based on the part identifier. This section is incomplete right now.
+		if ([[guid substringToIndex:2] isEqualToString:@"p:"]) {
+			index = (long long)[[guid substringWithRange:NSMakeRange(2, 1)] intValue];
+		}
+
+		/// I'm initializing the message to `nil` so that it is still nil
+		/// if it is not able to get the item in the following block
+		IMMessage* msg = nil;
+
+		// Sometimes it takes a few tries to actually load the messages correctly
+		for (int i = 0; i < 2 && msg == nil; i++) {
+			/// Have to call this to populate the `[chat chatItems]` array
+			/// If you don't call this, then `[chat messageForGUID:]` returns nil no matter what
+			[imchat loadMessagesUpToGUID:full_guid date:nil limit:nil loadImmediately:YES];
+
+			for (int l = 0; l < 100 && msg == nil; l++) // sometimes it takes a few tries here as well
+				/// Get the message that has the guid we want
+				msg = [imchat messageForGUID:full_guid];
+		}
+
+		if (msg == nil || [msg _imMessageItem] == nil)
+			return nil;
+
+		IMMessageItem *item = [msg _imMessageItem];
+
+		// the `messagePartRange` relates to the same information as the index, but reverse.
+		// When the index == $number_attachments, the range is $number_attachments ... $number_attachments+$body_length
+		// Else, it is $index ... $index+1
+		int range_start = index;
+		int range_end = [[item body] length];
+		int num_atts = [[msg inlineAttachmentAttributesArray] count];
+
+		if (index != num_atts) {
+			range_end = index + 1;
+		} else if ([msg hasInlineAttachments]) {
+			range_start = num_atts;
+			range_end += num_atts;
+		}
+
+		/// The `sendMessageAcknowledgment` method takes an IMTextMessagePartChatItem as the parameter,
+		/// so we have to initilize one with these exact values.
+		IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc]
+		                                                    _initWithItem:item
+		                                                    text:[item body]
+		                                                    index:index
+		                                                    messagePartRange:NSMakeRange(range_start, range_end)
+		                                                    subject:[item subject]];
+
+		return pci;
+	} else {
+		NSLog(@"LibSMServer_app: Couldn't connect to daemon to get IMTextMessagePartChatItem");
+	}
+
+	return nil;
 }
 
 @end
@@ -336,7 +369,8 @@
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter* sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] boolValue];
+			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
+			NSLog(@"LibSMServer_app: in async, isRunning: %d", isRunning);
 
 			/// if SMServer is not running, trying to grab the MRYIPCCenter in it and call anything on it crashes SpringBoard, so we need to check.
 			if (isRunning) {
@@ -359,7 +393,7 @@
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] boolValue];
+			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
 
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
@@ -384,7 +418,7 @@
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"com.ianwelker.smserver"] boolValue];
+			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
 
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];

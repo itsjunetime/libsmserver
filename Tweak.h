@@ -11,10 +11,12 @@
 @end
 
 @interface CKComposition : NSObject
++ (CKComposition *)composition;
 - (id)initWithText:(id)arg1 subject:(id)arg2;
 - (id)compositionByAppendingMediaObject:(id)arg1;
 - (id)compositionByAppendingText:(id)arg1;
 - (void)setSubject:(id)arg1;
+- (void)setText:(id)arg1;
 @end
 
 @interface CKMediaObject : NSObject
@@ -62,7 +64,11 @@
 - (void)sendMessage:(id)arg1 newComposition:(bool)arg2;
 @end
 
-@interface IMTranscriptChatItem : NSObject
+@interface IMChatItem : NSObject
+- (id)_item;
+@end
+
+@interface IMTranscriptChatItem : IMChatItem
 - (NSString *)guid;
 @end
 
@@ -102,6 +108,8 @@
 + (id)instantMessageWithText:(id)arg1 flags:(unsigned long long)arg2 threadIdentifier:(id)arg3;
 - (NSString *)guid;
 - (IMMessageItem *)_imMessageItem;
+- (bool)hasInlineAttachments;
+- (NSArray *)inlineAttachmentAttributesArray;
 @end
 
 @interface IMAccount : NSObject {
