@@ -1,5 +1,7 @@
 ARCHS = arm64 arm64e
 
+PREFIX=$(THEOS)/toolchain/Xcode.xctoolchain/usr/bin/
+
 TARGET := iphone:clang:latest:13.1:13.0
 INSTALL_TARGET_PROCESSES = MobileSMS, SpringBoard
 
@@ -17,6 +19,10 @@ include $(THEOS_MAKE_PATH)/tweak.mk
 include $(THEOS_MAKE_PATH)/aggregate.mk
 
 SYSROOT = $(THEOS)/sdks/iPhoneOS13.1.sdk
+
+internal-stage::
+	mkdir -p lib
+	cp $(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/libsmserver.dylib lib/libsmserver.dylib
 
 before-stage::
 	find . -name ".DS_Store" -delete

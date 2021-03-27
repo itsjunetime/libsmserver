@@ -1,2 +1,5 @@
 .theos
 .DS_Store
+lib
+lib/**
+packages/*debug*.deb
