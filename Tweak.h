@@ -56,6 +56,7 @@
 - (void)loadMessagesUpToGUID:(id)arg1 date:(id)arg2 limit:(unsigned long long)arg3 loadImmediately:(BOOL)arg4;
 - (void)deleteChatItems:(id)arg1;
 - (id)chatIdentifier;
+- (id)lastSentMessage;
 @end
 
 @interface CKConversation : NSObject
@@ -110,6 +111,9 @@
 - (IMMessageItem *)_imMessageItem;
 - (bool)hasInlineAttachments;
 - (NSArray *)inlineAttachmentAttributesArray;
+- (bool)isFromMe;
+- (bool)isDelivered;
+- (bool)isRead;
 @end
 
 @interface IMAccount : NSObject {

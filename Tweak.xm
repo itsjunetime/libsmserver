@@ -30,6 +30,7 @@
 		[_center addTarget:self action:@selector(sendTapback:)];
 		[_center addTarget:self action:@selector(delete:)];
 		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(receivedText:) name:@"__kIMChatMessageReceivedNotification" object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemsChanged:) name:@"__kIMChatItemsDidChangeNotification" object:nil];
 	}
 	return self;
 }
@@ -46,11 +47,26 @@
 	}
 }
 
+- (void)itemsChanged:(NSConcreteNotification *)notif {
+	BOOL isRunning = [[self checkIfRunning:@"SMServer"] boolValue];
+	IMMessage* message = [(IMChat*)[notif object] lastSentMessage];
+
+	if (isRunning) {
+		if (([message isRead] || [message isDelivered]) && [message isFromMe]) {
+			NSString* guid = [message guid];
+
+			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
+			if (![message isRead]) {
+				[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+			}
+		}
+	}
+}
+
 - (NSNumber *)sendText:(NSDictionary *)vals {
 	__block NSNumber* ret_bool = 0;
 
 	/// You have to run this on main thread to do the `mediaObjectWithFileURL` bit
-	//dispatch_sync(dispatch_get_main_queue(), ^{
 	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
 	void (^processBlock)() = ^{
@@ -59,7 +75,6 @@
 			NSString* body = vals[@"body"];
 			NSString* address = vals[@"address"];
 			NSString* sub = vals[@"subject"];
-			NSString* ret_guid; /// Will be used to give SMServer the guid of the sent text
 
 			/// These items have to be `NSAttributedString`s. Don't ask me why.
 			NSAttributedString* text = [[NSAttributedString alloc] initWithString:body];
@@ -95,9 +110,6 @@
 				IMMessage* message = [conversation messageWithComposition:composition];
 				[conversation sendMessage:message newComposition:YES];
 
-				/// grab the guid to send back to SMServer
-				ret_guid = [message guid];
-
 			} else {
 				/// If we get here, we don't have a conversation with them yet, so we have to
 				/// use IMCore to create a conversation and send them a text through that.
@@ -127,14 +139,7 @@
 					message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
 
 				[chat sendMessage:message];
-
-				/// grab the guid to send back to SMServer
-				ret_guid = [message guid];
 			}
-
-			/// Send the guid back to SMServer so that it can send the text info through the websocket.
-			MRYIPCCenter *center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-			[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:ret_guid];
 
 			ret_bool = @1;
 		} else {
@@ -405,32 +410,6 @@
 }
 
 %end
-
-/*%hook NSNotificationCenter
-
-- (void)postNotificationName:(NSString *)name object:(id)sender userInfo:(NSDictionary *)userInfo {
-	NSLog(@"LibSMServer_app: name is %@", name);
-	if ([name isEqualToString:@"__kIMChatRegistryMessageSentNotification"]) {
-
-		NSLog(@"LibSMServer_app: name is eq");
-
-		__block NSString* guid = [(IMMessage *)userInfo[@"__kIMChatRegistryMessageSentMessageKey"] guid];
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-
-			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
-
-			if (isRunning) {
-				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
-			}
-		});
-	}
-
-	%orig;
-}
-
-%end*/
 
 %hook IMDaemonController
 
