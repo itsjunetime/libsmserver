@@ -58,6 +58,8 @@
 			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
 			if (![message isRead]) {
 				[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+			} else {
+				[center callExternalVoidMethod:@selector(handleTextReadWithCallback:) withArguments:guid];
 			}
 		}
 	}
@@ -133,7 +135,7 @@
 				/// iOS 14+ and iOS 13- have different methods for initializing `IMMessage`s,
 				/// so we have to check what we're working with.
 				IMMessage* message;
-				if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 14.0)
+				if ([[[%c(UIDevice) currentDevice] systemVersion] floatValue] >= 14.0)
 					message = [%c(IMMessage) instantMessageWithText:text flags:1048581 threadIdentifier:nil];
 				else
 					message = [%c(IMMessage) instantMessageWithText:text flags:1048581];
@@ -190,7 +192,7 @@
 		/// and sometimes there's an `amb` value), but so far I haven't run into any issues.
 		NSDictionary *info = @{@"amc": @1, @"ams": [[(IMMessageItem *)[pci _item] body] string]};
 
-		if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
+		if ([[[%c(UIDevice) currentDevice] systemVersion] floatValue] < 14.0)
 			/// I honestly have no idea if this will work. No way to test
 			[chat sendMessageAcknowledgment:tapback forChatItem:pci withMessageSummaryInfo:info];
 		else
@@ -209,7 +211,7 @@
 }
 
 - (NSArray *)getPinnedChats {
-	if ([[[UIDevice currentDevice] systemVersion] floatValue] < 14.0)
+	if ([[[%c(UIDevice) currentDevice] systemVersion] floatValue] < 14.0)
 		return [NSArray array];
 
 	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
