@@ -1,8 +1,8 @@
-ARCHS = arm64 arm64e
+ARCHS = armv7 arm64 arm64e
 
 PREFIX=$(THEOS)/toolchain/Xcode.xctoolchain/usr/bin/
 
-TARGET := iphone:clang:latest:13.1:13.0
+TARGET := iphone:clang:latest:10.0:10.0
 INSTALL_TARGET_PROCESSES = MobileSMS, SpringBoard
 
 GO_EASY_ON_ME = 1

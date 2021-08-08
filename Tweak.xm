@@ -292,9 +292,9 @@
 - (IMTextMessagePartChatItem *)getIMTMPCIForStructuredGUID:(NSString *)guid inChat:(NSString *)chat {
 	IMDaemonController* controller = [%c(IMDaemonController) sharedController];
 
-	if ([controller connectToDaemon]) {
+	if (controller.connectToDaemon) {
 		// full_guid is just the text's guid, minus the part identifier (e.g. `p:o/`, `bp:`, etc)
-		NSString *full_guid = [guid substringFromIndex:[guid length] - 36];
+		NSString *full_guid = [guid substringFromIndex:guid.length - 36];
 		IMChat* imchat = [[%c(IMChatRegistry) sharedInstance] existingChatWithChatIdentifier:chat];
 
 		if (imchat == nil)
@@ -324,21 +324,21 @@
 				msg = [imchat messageForGUID:full_guid];
 		}
 
-		if (msg == nil || [msg _imMessageItem] == nil)
+		if (msg == nil || msg._imMessageItem == nil)
 			return nil;
 
-		IMMessageItem *item = [msg _imMessageItem];
+		IMMessageItem *item = msg._imMessageItem;
 
 		// the `messagePartRange` relates to the same information as the index, but reverse.
 		// When the index == $number_attachments, the range is $number_attachments ... $number_attachments+$body_length
 		// Else, it is $index ... $index+1
 		int range_start = index;
-		int range_end = [[item body] length];
-		int num_atts = [[msg inlineAttachmentAttributesArray] count];
+		int range_end = item.body.length;
+		int num_atts = msg.inlineAttachmentAttributesArray.count;
 
 		if (index != num_atts) {
 			range_end = index + 1;
-		} else if ([msg hasInlineAttachments]) {
+		} else if (msg.hasInlineAttachments) {
 			range_start = num_atts;
 			range_end += num_atts;
 		}
@@ -347,10 +347,10 @@
 		/// so we have to initilize one with these exact values.
 		IMTextMessagePartChatItem *pci = [[%c(IMTextMessagePartChatItem) alloc]
 		                                                    _initWithItem:item
-		                                                    text:[item body]
+		                                                    text:item.body
 		                                                    index:index
 		                                                    messagePartRange:NSMakeRange(range_start, range_end)
-		                                                    subject:[item subject]];
+		                                                    subject:item.subject];
 
 		return pci;
 	} else {
@@ -377,7 +377,6 @@
 
 			MRYIPCCenter* sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
 			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
-			NSLog(@"LibSMServer_app: in async, isRunning: %d", isRunning);
 
 			/// if SMServer is not running, trying to grab the MRYIPCCenter in it and call anything on it crashes SpringBoard, so we need to check.
 			if (isRunning) {
