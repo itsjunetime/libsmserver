@@ -277,6 +277,7 @@
 		} else {
 			IMTextMessagePartChatItem* pci = [self getIMTMPCIForStructuredGUID:text inChat:chat_id];
 
+			if (!pci) return @0;
 			/// It takes an array so that you can delete multiple at a time
 			[imchat deleteChatItems:@[pci]];
 
