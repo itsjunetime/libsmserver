@@ -36,30 +36,41 @@
 }
 
 - (void)receivedText:(NSConcreteNotification *)notif {
-	BOOL isRunning = [[self checkIfRunning:@"SMServer"] boolValue];
+	BOOL isRunning = [self checkIfRunning:@"SMServer"].boolValue;
 
 	if (isRunning) {
-		IMMessage *msg = [[notif userInfo] objectForKey:@"__kIMChatValueKey"];
-		NSString* guid = [msg guid];
+		IMMessage *msg = [notif.userInfo objectForKey:@"__kIMChatValueKey"];
+		NSString* guid = msg.guid;
 
 		MRYIPCCenter *center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+
+		@try {
+			[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+		}
+		@catch (id exc) {
+			NSLog(@"SMServer_app: Failed to call handleReceivedTextWithCallback: %@", exc);
+		}
 	}
 }
 
 - (void)itemsChanged:(NSConcreteNotification *)notif {
-	BOOL isRunning = [[self checkIfRunning:@"SMServer"] boolValue];
-	IMMessage* message = [(IMChat*)[notif object] lastSentMessage];
+	BOOL isRunning = [self checkIfRunning:@"SMServer"].boolValue;
+	IMMessage* message = ((IMChat*)notif.object).lastSentMessage;
 
 	if (isRunning) {
-		if (([message isRead] || [message isDelivered]) && [message isFromMe]) {
-			NSString* guid = [message guid];
+		if ((message.isRead || message.isDelivered) && message.isFromMe) {
+			NSString* guid = message.guid;
 
 			MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-			if (![message isRead]) {
-				[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
-			} else {
-				[center callExternalVoidMethod:@selector(handleTextReadWithCallback:) withArguments:guid];
+			@try {
+				if (!message.isRead) {
+					[center callExternalVoidMethod:@selector(handleReceivedTextWithCallback:) withArguments:guid];
+				} else {
+					[center callExternalVoidMethod:@selector(handleTextReadWithCallback:) withArguments:guid];
+				}
+			}
+			@catch (id exc) {
+				NSLog(@"SMServer_app: Failed to call handle(TextRead|ReceivedText)WithCallback: %@", exc);
 			}
 		}
 	}
@@ -200,7 +211,12 @@
 
 		/// Send tapback info back to SMServer so that it can send it through the websocket.
 		MRYIPCCenter *center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-		[center callExternalVoidMethod:@selector(handleSentTapbackWithCallback:) withArguments:vals];
+		@try {
+			[center callExternalVoidMethod:@selector(handleSentTapbackWithCallback:) withArguments:vals];
+		}
+		@catch (id exc) {
+			NSLog(@"SMServer_app: can't call handleSentTapbackWithCallback: %@", exc);
+		}
 
 		return @1;
 	} else {
@@ -377,12 +393,23 @@
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter* sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
+			_Bool isRunning = NO;
+			@try {
+				isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
+			}
+			@catch (id exc) {
+				NSLog(@"SMServer_app: can't call checkIfRunning: %@", exc);
+			}
 
 			/// if SMServer is not running, trying to grab the MRYIPCCenter in it and call anything on it crashes SpringBoard, so we need to check.
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @0}];
+				@try {
+					[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @0}];
+				}
+				@catch (id exc) {
+					NSLog(@"SMServer_app: can't call handlePartyTypingWithCallback: %@", exc);
+				}
 			}
 		});
 	}
@@ -400,11 +427,22 @@
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
 			MRYIPCCenter *sbCenter = [MRYIPCCenter centerNamed:@"com.ianwelker.smserver"];
-			_Bool isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
+			_Bool isRunning = NO;
+			@try {
+				isRunning = [[sbCenter callExternalMethod:@selector(checkIfRunning:) withArguments:@"SMServer"] boolValue];
+			}
+			@catch (id exc) {
+				NSLog(@"SMServer_app: can't call checkIfRunning: %@", exc);
+			}
 
 			if (isRunning) {
 				MRYIPCCenter* center = [MRYIPCCenter centerNamed:@"com.ianwelker.smserverHandleText"];
-				[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @1}];
+				@try {
+					[center callExternalVoidMethod:@selector(handlePartyTypingWithCallback:) withArguments:@{@"chat": sender, @"typing": @1}];
+				}
+				@catch (id exc) {
+					NSLog(@"SMServer_app: can't call handlePartyTypingWithCallback: %@", exc);
+				}
 			}
 		});
 	}
